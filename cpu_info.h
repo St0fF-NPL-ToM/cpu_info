@@ -76,13 +76,13 @@ struct APICID_BIT_LAYOUT_CTX
  * The enumeration of domain identifiers and these need to each match
  * the value as specified by CPUID.1F and CPUID.B documentation.
  */
-#define CPU_DOMAINS(X)   \
-	X(InvalidDomain)     \
-	X(LogicalDomain) \
-	X(CoreDomain)        \
-	X(ModuleDomain)      \
-	X(TileDomain)        \
-	X(DieDomain)         \
+#define CPU_DOMAINS(X) \
+	X(InvalidDomain)   \
+	X(LogicalDomain)   \
+	X(CoreDomain)      \
+	X(ModuleDomain)    \
+	X(TileDomain)      \
+	X(DieDomain)       \
 	X(DieGrpDomain)
 #define X(name) name,
 enum cpu_domain
@@ -97,11 +97,11 @@ class cpu_info
 #undef X
 
 	unsigned sourceLeaf;
-	vector<map<unsigned, int>> lvl_ids;
-	vector<string> cpu_ids;
 	vector<pair<int, string>> masks_names;
 
 public:
+	vector<string> cpu_ids;
+	vector<map<unsigned, int>> lvl_ids;
 	cpu_info();
 
 	int countLevel(cpu_domain lvl) const noexcept;
