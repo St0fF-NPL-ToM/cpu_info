@@ -1,18 +1,38 @@
 
 #include <iostream>
 #include "cpu_info.h"
+#include <ranges>
 
 using namespace std;
+using namespace cpu_info;
 
-int main(int argc, const char *argv[])
+template < typename T >
+ostream & operator<<( ostream & s, const vector< T > & v )
 {
-	cpu_info brot;
-	cout << "logical:  " << brot.countLevel(cpu_domain::LogicalDomain) << ",\n"
-		 << "physical: " << brot.countLevel(cpu_domain::CoreDomain) << ",\n"
-		 << "modules:  " << brot.countLevel(cpu_domain::ModuleDomain) << endl;
-	int tpl{8};
-	for (auto &id : brot.cpu_ids)
-		cout << id << (--tpl ? ", " : (tpl = 8, "\n"));
-	cout << endl;
+	auto it = v.begin();
+	while ( it != v.end() ) s << *it << ( ++it == v.end() ? "" : ", " );
+	return s;
+}
+
+int main( int argc, const char * argv[] )
+{
+	cpu_topo   brot;
+	const auto logical	= brot.countLevel( cpu_domain::LogicalDomain );
+	const auto physical = brot.countLevel( cpu_domain::CoreDomain );
+	cout << "logical:  " << logical << ",\n"
+		 << "physical: " << physical << ",\n"
+		 << "modules:  " << brot.countLevel( cpu_domain::ModuleDomain ) << endl;
+	int tpl{ 8 };
+	for ( auto i: views::iota( 0ull, brot.cpu_ids.size() ) )
+		cout << brot.id_string(i) << ( --tpl ? ", " : ( tpl = 8, "\n" ) );
+
+	cout << endl << "optimal affinities: " << endl;
+	for ( int n( 2 ); n <= physical; n += n )
+	{
+		cout << "count: " << format( "{:02d}", n ) << " mask:";
+		auto ids = optimalProcessAffinity( n, true, brot );
+		for ( auto id: ids ) cout << brot.cpu_ids.at( id ) << ", ";
+		cout << endl;
+	}
 	return 0;
 }
