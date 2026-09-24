@@ -131,6 +131,17 @@ namespace cpu_info
 		return result;
 	}
 
+	id_list cpu_topo::optimalProcessAffinity( int thread_count, bool prefer_performance )
+	{
+		id_list ids;
+		// prefer_performance means cores, that do not share logical CPUs
+		if ( prefer_performance )
+		{
+		} else
+		{}
+		return ids;
+	}
+
 	void cpu_topo::parse_cpuid_legacy( const cpuid_result &zero_zero )
 	{
 		unsigned int MaximumAddressibleIdsPhysicalPackage{ 1 };
@@ -336,15 +347,5 @@ namespace cpu_info
 		}
 	}
 
-	id_list optimalProcessAffinity( int thread_count, bool prefer_performance, cpu_topo topology )
-	{
-		id_list ids;
-		// prefer_performance means cores, that do not share logical CPUs
-		if ( prefer_performance )
-		{
-		} else
-		{}
-		return ids;
-	}
 	void setThreadAffinity( const id_list &target_ids ) {}
 } // namespace cpu_info

@@ -31,7 +31,7 @@ int main( int argc, const char* argv[] )
 	for ( int n( 2 ); n <= physical; n += n )
 	{
 		cout << "count: " << format( "{:02d}", n ) << " mask:";
-		auto ids = optimalProcessAffinity( n, true, brot );
+		auto ids = brot.optimalProcessAffinity( n, true );
 		for ( auto id: ids ) cout << brot.cpu_ids.at( id ) << ", ";
 		cout << endl;
 	}

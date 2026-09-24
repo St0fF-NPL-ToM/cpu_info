@@ -134,11 +134,17 @@ namespace cpu_info
 
 #pragma endregion
 
-	/* static interface functions
+	/* static interface functions:
 	 */
 	extern cpuid_result call_cpuid( unsigned Leaf, unsigned Subleaf ) noexcept;
 	extern void			bind_thread_to_cpu( unsigned ProcessorNumber );
 	extern unsigned		get_logical_cpu_count() noexcept;
+
+	/*
+	 *	Extra functions that may be helpful on larger systems
+	 *	when using excessive threading in your application.
+	 */
+	extern void			setThreadAffinity( const id_list &target_ids );
 
 	/*	cpu topology class:
 	 *	- runs 'the topology acquisition' code in the CTor,
@@ -167,9 +173,11 @@ namespace cpu_info
 		cpu_topo( bool force_legacy_detection = false );
 
 		// count items of a specific domain (like logical cpu count, core count, tile, package)
-		int	   countLevel( cpu_domain lvl ) const noexcept;
+		int		countLevel( cpu_domain lvl ) const noexcept;
 
-		cpu_id id( size_t index ) const noexcept;
+		cpu_id	id( size_t index ) const noexcept;
+
+		id_list optimalProcessAffinity( int thread_count, bool prefer_performance = true );
 
 	  protected:
 		void		 parse_cpuid_legacy( const cpuid_result &zero_zero );
@@ -180,12 +188,4 @@ namespace cpu_info
 
 		void		 finish_topology();
 	};
-
-	/*
-	 *	Extra functions that may be helpful on larger systems
-	 *	when using excessive threading in your application.
-	 */
-	id_list optimalProcessAffinity( int thread_count, bool prefer_performance = true,
-									cpu_topo topology = {} );
-	void	setThreadAffinity( const id_list &target_ids );
 } // namespace cpu_info
