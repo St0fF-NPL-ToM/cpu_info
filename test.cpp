@@ -7,16 +7,16 @@ using namespace std;
 using namespace cpu_info;
 
 template < typename T >
-ostream & operator<<( ostream & s, const vector< T > & v )
+ostream& operator<<( ostream& s, const vector< T >& v )
 {
 	auto it = v.begin();
 	while ( it != v.end() ) s << *it << ( ++it == v.end() ? "" : ", " );
 	return s;
 }
 
-int main( int argc, const char * argv[] )
+int main( int argc, const char* argv[] )
 {
-	cpu_topo   brot;
+	cpu_topo   brot( false );
 	const auto logical	= brot.countLevel( cpu_domain::LogicalDomain );
 	const auto physical = brot.countLevel( cpu_domain::CoreDomain );
 	cout << "logical:  " << logical << ",\n"
@@ -24,7 +24,8 @@ int main( int argc, const char * argv[] )
 		 << "modules:  " << brot.countLevel( cpu_domain::ModuleDomain ) << endl;
 	int tpl{ 8 };
 	for ( auto i: views::iota( 0ull, brot.cpu_ids.size() ) )
-		cout << brot.id_string(i) << ( --tpl ? ", " : ( tpl = 8, "\n" ) );
+		cout << format( "{:02d} = ", i ) << brot.id_string( i )
+			 << ( --tpl ? ", " : ( tpl = 8, "\n" ) );
 
 	cout << endl << "optimal affinities: " << endl;
 	for ( int n( 2 ); n <= physical; n += n )

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="cpu_info::cpuid_result">
+    <DisplayString>A:{x.Register.Eax,X} B:{x.Register.Ebx,X} C:{x.Register.Ecx,X} D:{x.Register.Edx,X}</DisplayString>
+  </Type>
+
+  <Type Name="cpu_info::cpu_id">
+    <DisplayString Condition="first == -1">undefined</DisplayString>
+    <DisplayString>{first}</DisplayString>
+  </Type>
+
+	<Type Name="std::vector&lt;*&gt;">
+		<Intrinsic Name="size" Expression="(size_t)(_Mypair._Myval2._Mylast - _Mypair._Myval2._Myfirst)" />
+		<Intrinsic Name="capacity" Expression="(size_t)(_Mypair._Myval2._Myend - _Mypair._Myval2._Myfirst)" />
+		<DisplayString>{{ size={size()} }}</DisplayString>
+		<Expand>
+			<Item Name="[capacity]" ExcludeView="simple">capacity()</Item>
+			<Item Name="[allocator]" ExcludeView="simple">_Mypair</Item>
+			<ArrayItems>
+			<Size>size()</Size>
+			<ValuePointer>_Mypair._Myval2._Myfirst</ValuePointer>
+			</ArrayItems>
+		</Expand>
+	</Type>
+
+  <Type Name="cpu_info::apicid_bit_layout">
+	<DisplayString>{domain,s}, →{shift,X}, masks:{masks.size()}</DisplayString>
+  </Type>
+</AutoVisualizer>
