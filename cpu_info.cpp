@@ -12,7 +12,6 @@
 #endif
 
 #include "cpu_info.h"
-#include <format>
 #include <list>
 #include <ranges>
 
@@ -23,6 +22,8 @@
 
 namespace cpu_info
 {
+	/* static */
+	int			 cpu_id::fmt_width{ 2 };
 	/* static */
 	cpuid_result call_cpuid( unsigned int Leaf, unsigned int Subleaf ) noexcept
 	{
@@ -102,14 +103,11 @@ namespace cpu_info
 		return NumberOfProcessors;
 	}
 
-	/*static*/
-	const apic_id_bit_layout apicid_bit_layouts::empty_layout{ InvalidDomain, 0, mask_map{} };
-
 	cpu_topo::cpu_topo( bool force_legacy )
 	{
 		// For initialization, setup globals
 		auto CpuidRegisters = call_cpuid( 0, 0 );
-		PopulatePlatformApicIds( CpuidRegisters );
+		populate_apic_ids( CpuidRegisters );
 		if ( CpuidRegisters.x.Register.Eax < 0xB || force_legacy )
 			parse_cpuid_legacy( CpuidRegisters );
 		else
@@ -117,6 +115,7 @@ namespace cpu_info
 			sourceLeaf = CpuidRegisters.x.Register.Eax >= 0x1F ? 0x1F : 0x0B;
 			parse_cpuid_modern();
 		}
+		finish_topology();
 	}
 
 	int cpu_topo::countLevel( cpu_domain lvl ) const noexcept
@@ -125,27 +124,10 @@ namespace cpu_info
 		return lvl_ids[ lvl - 1 ].size();
 	}
 
-	cpu_id cpu_topo::id_of( size_t index ) const noexcept
+	cpu_id cpu_topo::id( size_t index ) const noexcept
 	{
 		cpu_id result;
 		if ( index < cpu_ids.size() ) result = cpu_ids[ index ];
-		return result;
-	}
-
-	string cpu_topo::id_string( size_t index ) const noexcept
-	{
-		string result;
-		if ( auto id = id_of( index ) )
-		{
-			// get formatting info, prepare string
-			auto fmts = getFmt();
-			result	  = vformat( fmts.second + "(", make_format_args( id.first ) );
-			// append pieces to the string
-			auto it	  = id.second.rbegin();
-			while ( it != id.second.rend() )
-				result.append( vformat( fmts.second, make_format_args( *it ) ) )
-					.append( ++it != id.second.rend() ? ":" : ")" );
-		}
 		return result;
 	}
 
@@ -199,8 +181,8 @@ namespace cpu_info
 				LogicalProcessorsPerCore =
 					MaximumAddressibleIdsPhysicalPackage / MaximumAddressibleIdsCores;
 				LogicalProcessorsPerPackage = MaximumAddressibleIdsPhysicalPackage;
-				LogicalProcessorShift		= CreateTopologyShift( LogicalProcessorsPerCore );
-				PackageShift				= CreateTopologyShift( LogicalProcessorsPerPackage );
+				LogicalProcessorShift		= create_topology_shift( LogicalProcessorsPerCore );
+				PackageShift				= create_topology_shift( LogicalProcessorsPerPackage );
 			} else
 			{ // You cannot report Cores here, a Package == Core and so this only reports SMT within
 			  // a Package.
@@ -208,27 +190,23 @@ namespace cpu_info
 				LogicalProcessorsPerPackage = MaximumAddressibleIdsPhysicalPackage;
 
 				LogicalProcessorShift		= PackageShift =
-					CreateTopologyShift( MaximumAddressibleIdsPhysicalPackage );
+					create_topology_shift( MaximumAddressibleIdsPhysicalPackage );
 			}
 		} else // You do not report Cores or SMT here.  It's always 1 Logical Processor.
 			LogicalProcessorShift = PackageShift =
-				CreateTopologyShift( MaximumAddressibleIdsPhysicalPackage );
-
+				create_topology_shift( MaximumAddressibleIdsPhysicalPackage );
 
 		abl.emplace_back( LogicalDomain, LogicalProcessorShift, mask_map{} );
 		abl.emplace_back( CoreDomain, PackageShift, mask_map{} );
 		abl.top_domain = ModuleDomain;
-		create_domain_masks();
-		finish_topology();
 	}
 
 	void cpu_topo::parse_cpuid_modern()
 	{
-		unsigned int		  Subleaf{ 0 };
-		unsigned int		  DomainType{};
-		unsigned int		  DomainShift{};
-		cpuid_result		  CpuidRegisters{ call_cpuid( sourceLeaf, Subleaf ) };
-		APICID_BIT_LAYOUT_CTX ApicidBitLayoutCtx{ .NumberOfApicIdBits = 32 };
+		unsigned int Subleaf{ 0 };
+		unsigned int DomainType{};
+		unsigned int DomainShift{};
+		cpuid_result CpuidRegisters{ call_cpuid( sourceLeaf, Subleaf ) };
 
 		while ( CpuidRegisters.x.Register.Ebx != 0 )
 		{
@@ -250,106 +228,20 @@ namespace cpu_info
 				case TileDomain:
 				case DieDomain:
 				case DieGrpDomain:
-					ApicidBitLayoutCtx.ShiftValues[ ApicidBitLayoutCtx.PackageDomainIndex ] =
-						DomainShift;
-					ApicidBitLayoutCtx.ShiftValueDomain[ ApicidBitLayoutCtx.PackageDomainIndex ] =
-						DomainType;
-					ApicidBitLayoutCtx.PackageDomainIndex++;
 					abl.emplace_back( ( cpu_domain ) DomainType, DomainShift, mask_map{} );
 					break;
 
 				default:
 					// First Domain is always Logical Processor, so we will always have a valid
 					// previous.
-					ApicidBitLayoutCtx.ShiftValues[ ApicidBitLayoutCtx.PackageDomainIndex - 1 ] =
-						DomainShift;
 					abl.back().shift = DomainShift;
 					abl.top_domain	 = ( cpu_domain ) DomainType;
 			}
 			CpuidRegisters = call_cpuid( sourceLeaf, ++Subleaf );
 		}
-		create_domain_masks( &ApicidBitLayoutCtx );
-		ManyDomainFinalize( &ApicidBitLayoutCtx );
 	}
 
-	void cpu_topo::create_domain_masks( APICID_BIT_LAYOUT_CTX *pApicidBitLayoutCtx )
-	{
-		unsigned int DomainIndex{ 0 };
-		unsigned int PreviousBit{ 0 }, prev_bit{ 0 };
-		unsigned int NextDomainIndex;
-
-		// Create globally identifiable masks for each domain.
-		for ( ; DomainIndex < pApicidBitLayoutCtx->PackageDomainIndex; DomainIndex++ )
-		{
-			pApicidBitLayoutCtx->DomainRelativeMasks[ DomainIndex ][ DomainIndex ] =
-				~( ( 1 << PreviousBit ) - 1 );
-			PreviousBit = pApicidBitLayoutCtx->ShiftValues[ DomainIndex ];
-			abl[ DomainIndex ].relative_masks.emplace( DomainIndex, ~( ( 1 << prev_bit ) - 1 ) );
-			prev_bit = abl[ DomainIndex ].shift;
-		}
-		// Create a relative identifier for each Domain to another higher level Domain
-		for ( DomainIndex = 0; DomainIndex < pApicidBitLayoutCtx->PackageDomainIndex;
-			  DomainIndex++ )
-		{
-			/* Start to create relative IDs to the next level above the current.
-			 *
-			 *     A relative ID is taking the global ID mask and removing the previous mask (which
-			 * is already done) and then removing the mask of the higher level domain, so for
-			 * example:
-			 *
-			 *     A global Logical processor mask would be 0xFFFFFFFF since all logical processors
-			 * are the lowest identifier so the entire APIC ID is needed.
-			 *
-			 *     A global Core mask could be:  0xFFFFFFFE  meaning the Core ID doesn't include the
-			 * lower Logical Processor IDs.  This will identify the 2 Logical processors as a core
-			 * globally.
-			 *
-			 *     A global Package mask could be:  0xFFFFFFF8  Meaning we can identify this package
-			 * among other packages and this package has 8 logical processors.
-			 *
-			 *
-			 *     To then create a Mask to create an ID relative to Package, we would do
-			 * ~(0xFFFFFFF8) & 0xFFFFFFFE  = 0x00000006  Essentially, you remove the ID mask for the
-			 * upper domain from the global mask ID for the core.  To create the full ID though you
-			 * also need to use the low bit's shift value.
-			 *
-			 *     (APIC ID & 0x6)>>1 = CORE_ID for the Package.
-			 */
-			for ( NextDomainIndex = DomainIndex + 1;
-				  NextDomainIndex <= pApicidBitLayoutCtx->PackageDomainIndex;
-				  NextDomainIndex++ )
-			{
-				pApicidBitLayoutCtx->DomainRelativeMasks[ DomainIndex ][ NextDomainIndex ] =
-					( ~pApicidBitLayoutCtx
-						   ->DomainRelativeMasks[ NextDomainIndex ][ NextDomainIndex ] )
-					& ( pApicidBitLayoutCtx->DomainRelativeMasks[ DomainIndex ][ DomainIndex ] );
-				abl[ DomainIndex ].relative_masks.emplace(
-					NextDomainIndex,
-					( ~( NextDomainIndex < abl.size()
-							 ? abl[ NextDomainIndex ].relative_masks[ NextDomainIndex ]
-							 : 0 ) )
-						& ( abl[ DomainIndex ].relative_masks[ DomainIndex ] ) );
-			}
-		}
-	}
-
-	void cpu_topo::create_domain_masks()
-	{
-		unsigned	index{}, nxt_index{}, prev_bit{}, domains{ ( unsigned ) abl.size() };
-		const auto &ca{ abl };
-		for ( ; index < domains; ++index )
-		{
-			abl[ index ].relative_masks.emplace( index, ~( ( 1 << prev_bit ) - 1 ) );
-			prev_bit = ca[ index ].shift;
-		}
-		for ( index = 0u; index < domains; ++index )
-			for ( nxt_index = index + 1; nxt_index <= domains; ++nxt_index )
-				abl[ index ].relative_masks.emplace(
-					nxt_index, ( ~ca[ nxt_index ].relative_masks[ nxt_index ] )
-								   & ( ca[ index ].relative_masks[ index ] ) );
-	}
-
-	unsigned int cpu_topo::CreateTopologyShift( unsigned int count )
+	unsigned int cpu_topo::create_topology_shift( unsigned int count )
 	{
 		unsigned int Shift{ 31u };
 		unsigned int Index{ ( 1u << Shift ) };
@@ -361,13 +253,16 @@ namespace cpu_info
 		return Shift;
 	}
 
-	void cpu_topo::PopulatePlatformApicIds( cpuid_result &CpuidRegisters )
+	void cpu_topo::populate_apic_ids( cpuid_result &CpuidRegisters )
 	{
 		// Determine X2APIC ID or fall back to APIC ID.
 		auto NumberOfProcessors{ get_logical_cpu_count() };
 		auto id{ std::min( CpuidRegisters.x.Register.Eax, 0x1Fu ) };
 
+		cpu_id::fmt_width = int( log2( NumberOfProcessors - 1 ) / 4 ) + 1;
+		// is this really necessary?
 		if ( NumberOfProcessors > MAX_PROCESSORS ) NumberOfProcessors = MAX_PROCESSORS;
+
 		if ( id < 0x1fu && ( id = std::min( id, 0xbu ) ) < 0x0b ) id = 1;
 		apic_cpu_ids.clear();
 		for ( auto Index{ 0u }; Index < NumberOfProcessors; Index++ )
@@ -393,115 +288,54 @@ namespace cpu_info
 		}
 	}
 
-	void cpu_topo::ThreeDomainFinalize( unsigned int PackageShift,
-										unsigned int LogicalProcessorShift )
-	{
-		lvl_ids.resize( 3 );
-		unsigned int LogicalProcessorMask{ ( 1u << LogicalProcessorShift ) - 1 };
-		unsigned int CoreProcessorMask( ( ( 1u << PackageShift ) - 1 ) ^ LogicalProcessorMask );
-		unsigned int PackageMask{ ~( ( 1u << PackageShift ) - 1 ) };
-
-		unsigned int NumberOfLogicalProcessors{ ( unsigned ) apic_cpu_ids.size() };
-		for ( unsigned int ProcessorIndex = 0; ProcessorIndex < NumberOfLogicalProcessors;
-			  ProcessorIndex++ )
-		{
-			id_list id( { apic_cpu_ids[ ProcessorIndex ],
-						  apic_cpu_ids[ ProcessorIndex ] >> LogicalProcessorShift } );
-			lvl_ids[ 0 ][ id[ 0 ] ]++;
-			lvl_ids[ 1 ][ id[ 1 ] ]++;
-			lvl_ids[ 2 ][ 0 ]++;
-			cpu_ids.emplace_back( make_pair( apic_cpu_ids[ ProcessorIndex ], move( id ) ) );
-		}
-	}
-
-	void cpu_topo::ManyDomainFinalize( APICID_BIT_LAYOUT_CTX *pApicidBitLayoutCtx )
-	{
-		unsigned int DomainShift;
-		unsigned int NumberOfLogicalProcessors{ ( unsigned ) apic_cpu_ids.size() };
-		unsigned int TopDomainIndex{ pApicidBitLayoutCtx->PackageDomainIndex };
-		unsigned int ProcessorIndex{ 0 };
-		unsigned int DomainIndex{ 0 };
-		// produce topology masks depending on what we got
-		for ( ; DomainIndex <= TopDomainIndex; DomainIndex++ )
-			if ( pApicidBitLayoutCtx->ShiftValues[ DomainIndex ] != 0 )
-				level_masks_names.emplace(
-					pApicidBitLayoutCtx->ShiftValueDomain[ DomainIndex ],
-					make_pair(
-						pApicidBitLayoutCtx->DomainRelativeMasks[ DomainIndex ][ DomainIndex ],
-						DomainIndex == TopDomainIndex
-							? "_pkg_"
-							: lvl_base_names[ pApicidBitLayoutCtx
-												  ->ShiftValueDomain[ DomainIndex ] ] ) );
-
-		lvl_ids.resize( TopDomainIndex + 1 );
-		for ( ; ProcessorIndex < apic_cpu_ids.size(); ProcessorIndex++ )
-		{
-			id_list id;
-			for ( DomainIndex = 0, DomainShift = 0; DomainIndex < TopDomainIndex; DomainIndex++ )
-			{
-				if ( pApicidBitLayoutCtx->ShiftValues[ DomainIndex ] != 0 )
-				{
-					const auto index =
-						( pApicidBitLayoutCtx->DomainRelativeMasks[ DomainIndex ][ TopDomainIndex ]
-						  & apic_cpu_ids[ ProcessorIndex ] )
-						>> DomainShift;
-					lvl_ids[ DomainIndex ][ index ]++;
-					id.push_back( index );
-				}
-				DomainShift = pApicidBitLayoutCtx->ShiftValues[ DomainIndex ];
-			}
-			lvl_ids[ DomainIndex ]
-				   [ ( pApicidBitLayoutCtx->DomainRelativeMasks[ TopDomainIndex ][ TopDomainIndex ]
-					   & apic_cpu_ids[ ProcessorIndex ] )
-					 >> pApicidBitLayoutCtx->ShiftValues[ TopDomainIndex - 1 ] ]++;
-			cpu_ids.emplace_back( make_pair( apic_cpu_ids[ ProcessorIndex ], id ) );
-		}
-	}
-
 	void cpu_topo::finish_topology()
 	{
-		unsigned int top_domain{ ( unsigned ) abl.size() };
-		unsigned int cpu_cnt{ ( unsigned ) apic_cpu_ids.size() };
-		unsigned int domain{ 0 };
-		unsigned int domain_shift;
+		unsigned	index{}, nxt_index{}, prev_bit{}, top_domain{ ( unsigned ) abl.size() };
+		unsigned	domain_shift, cpu_cnt{ ( unsigned ) apic_cpu_ids.size() };
+		const auto &ca{ abl };
+		for ( ; index < top_domain; ++index )
+		{
+			abl[ index ].relative_masks.emplace( index, ~( ( 1 << prev_bit ) - 1 ) );
+			prev_bit = ca[ index ].shift;
+		}
+		for ( index = 0u; index < top_domain; ++index )
+			for ( nxt_index = index + 1; nxt_index <= top_domain; ++nxt_index )
+				abl[ index ].relative_masks.emplace(
+					nxt_index, ( ~ca[ nxt_index ].relative_masks[ nxt_index ] )
+								   & ( ca[ index ].relative_masks[ index ] ) );
+
 		// produce topology masks depending on what we got
-		for ( ; domain <= top_domain; domain++ )
-			if ( abl[ domain ].shift != 0 )
+		for ( ; index <= top_domain; index++ )
+			if ( ca[ index ].shift != 0 )
 				level_masks_names.emplace(
-					abl[ domain ].shift,
-					make_pair( abl[ domain ].relative_masks[ domain ],
-							   domain == top_domain ? "_pkg_"
-													: lvl_base_names[ abl[ domain ].domain ] ) );
+					ca[ index ].domain,
+					make_pair( ca[ index ].relative_masks[ index ],
+							   index == top_domain ? "_pkg_"
+												   : lvl_base_names[ ca[ index ].domain ] ) );
 
 		lvl_ids.resize( top_domain + 1 );
 		for ( unsigned cpu{}; cpu < cpu_cnt; cpu++ )
 		{
 			id_list id;
-			for ( domain = 0, domain_shift = 0; domain < top_domain; domain++ )
+			for ( index = 0, domain_shift = 0; index < top_domain; index++ )
 			{
-				if ( abl[ domain ].shift != 0 )
+				if ( ca[ index ].shift != 0 )
 				{
-					const auto index =
-						( abl[ domain ].relative_masks[ top_domain ] & apic_cpu_ids[ cpu ] )
+					const auto domain_index =
+						( ca[ index ].relative_masks[ top_domain ] & apic_cpu_ids[ cpu ] )
 						>> domain_shift;
-					lvl_ids[ domain ][ index ]++;
-					id.push_back( index );
+					lvl_ids[ index ][ domain_index ]++;
+					id.push_back( domain_index );
 				}
-				domain_shift = abl[ domain ].shift;
+				domain_shift = abl[ index ].shift;
 			}
-			lvl_ids[ domain ]
-				   [ ( abl[ top_domain ].relative_masks[ top_domain ] & apic_cpu_ids[ cpu ] )
-					 >> abl[ top_domain - 1 ].shift ]++;
+			lvl_ids[ index ]
+				   [ ( ca[ top_domain ].relative_masks[ top_domain ] & apic_cpu_ids[ cpu ] )
+					 >> ca[ top_domain - 1 ].shift ]++;
 			cpu_ids.emplace_back( make_pair( apic_cpu_ids[ cpu ], id ) );
 		}
 	}
 
-	pair< string, string > cpu_topo::getFmt() const noexcept
-	{
-		const auto sz{ 1 + ( unsigned int ) std::log10( get_logical_cpu_count() ) };
-		return { '{' + std::format( ":0{:d}d", sz ) + '}',
-				 '{' + std::format( ":#0{:d}X", sz + 2 ) + '}' };
-	}
 	id_list optimalProcessAffinity( int thread_count, bool prefer_performance, cpu_topo topology )
 	{
 		id_list ids;

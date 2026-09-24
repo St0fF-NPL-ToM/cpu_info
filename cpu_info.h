@@ -9,22 +9,21 @@
  * 	Usage:
  * ========
  * 	namespace functions:
- * 		4Regs 		call_cpuid( Leaf, Sub ) 		→ execute the respective CPUID
- *		void 		bind_thread_to_cpu( cpuNumber ) → what it's called …
- *		unsigned 	get_logical_cpu_count() 		→ again, the naming speaks …
+ * 		cpuid_result	call_cpuid( Leaf, Sub ) 		→ execute the respective CPUID
+ *		void 			bind_thread_to_cpu( cpuNumber ) → what it's called …
+ *		unsigned 		get_logical_cpu_count() 		→ again, the naming speaks …
  *
  *	class cpu_topo:	simply instantiate, then query.
- *
  * 	→
  */
 
 #include <vector>
 #include <map>
-#include <string>
+#include <format>
 
 namespace cpu_info
 {
-#pragma region declare uses, defines, and structures
+#pragma region declare uses and structures
 
 	using namespace std;
 
@@ -33,7 +32,19 @@ namespace cpu_info
 
 	struct cpu_id : pair< unsigned, id_list >
 	{
-		operator bool() const noexcept { return !second.empty(); }
+		static int fmt_width;
+
+				   operator bool() const noexcept { return !second.empty(); }
+				   operator string() const noexcept
+		{
+			string list, fmtstr = '{' + format( ":#0{:d}X", fmt_width + 2 ) + '}';
+			for ( auto i( 0u ); i < second.size(); ++i )
+			{
+				if ( !list.empty() ) list.insert( list.begin(), ':' );
+				list.insert( 0, vformat( fmtstr, make_format_args( second[ i ] ) ) );
+			}
+			return vformat( fmtstr + "({:s})", make_format_args( first, list ) );
+		}
 	};
 
 	struct cpuid_result
@@ -74,45 +85,13 @@ namespace cpu_info
 	 */
 	constexpr unsigned MAXIMUM_DOMAINS = 32;
 	constexpr unsigned MAX_PROCESSORS  = 1024;
-	struct APICID_BIT_LAYOUT_CTX
-	{
-		/* To support this as legacy APIC, the structure will contain the number
-		 * of bits that represent an APIC ID, which has been 4, 8 and 32(Today).
-		 *
-		 * This code only will set it to 8 or 32.
-		 */
-		unsigned int NumberOfApicIdBits;
-		/*
-		 * These are a cache of CPUID Topology as returned from CPUID.1F or CPUID.B.
-		 *
-		 * The usage beyond mirroring the values in a simple structure is that these
-		 * values can contain a collapsed version from Unknown Domains to a list of
-		 * all known domains or other number of levels.
-		 */
-		unsigned int ShiftValues[ MAXIMUM_DOMAINS ];
-		unsigned int ShiftValueDomain[ MAXIMUM_DOMAINS ];
-		/*
-		 * This is a domain relative where the index is based on the domain
-		 * level index.  The second index determines the relative to the current
-		 * domain mask.  The index where both entries are the current domain represents
-		 * a global mask to ID this domain level globally.
-		 *
-		 * The indexes then move to the next higher domain creating a relative mask from the
-		 * current domain relative to the second domain level index.
-		 *
-		 */
-		unsigned int DomainRelativeMasks[ MAXIMUM_DOMAINS ][ MAXIMUM_DOMAINS ];
-		/*
-		 * The top index in the above matrix that contains the package domain.
-		 */
-		unsigned int PackageDomainIndex;
-		/*
-		 * This is a string that allows a description to be passed from the parsing function
-		 * to the general display function for context.
-		 */
-		char		 szDescription[ 256 ];
-	};
 
+	/*	replacing INTEL's C-structs with some OOP
+	 * -------------------------------------------
+	 *	→ a map with a const operator[], returning default on non-existing itens
+	 *	→ a structure to hold all data of one CPU level domain (using that map)
+	 *	→ a vector with the same option as that map: return an "empty default"
+	 */
 	class mask_map : public map< unsigned, unsigned >
 	{
 	  public:
@@ -132,8 +111,7 @@ namespace cpu_info
 	};
 	class apicid_bit_layouts : public vector< apic_id_bit_layout >
 	{
-		static constexpr unsigned		number_of_apic_bits = 32;
-		static const apic_id_bit_layout empty_layout;
+		static constexpr unsigned number_of_apic_bits = 32;
 
 	  public:
 		cpu_domain			top_domain{ InvalidDomain };
@@ -147,10 +125,10 @@ namespace cpu_info
 			return vector< apic_id_bit_layout >::operator[]( index );
 		}
 		// likewise
-		const apic_id_bit_layout &operator[]( size_t index ) const
+		const apic_id_bit_layout operator[]( size_t index ) const
 		{
 			if ( index < size() ) return vector< apic_id_bit_layout >::operator[]( index );
-			else return empty_layout;
+			else return { InvalidDomain, 0, mask_map{} };
 		}
 	};
 
@@ -191,23 +169,16 @@ namespace cpu_info
 		// count items of a specific domain (like logical cpu count, core count, tile, package)
 		int	   countLevel( cpu_domain lvl ) const noexcept;
 
-		cpu_id id_of( size_t index ) const noexcept;
-		string id_string( size_t index ) const noexcept;
+		cpu_id id( size_t index ) const noexcept;
 
 	  protected:
 		void		 parse_cpuid_legacy( const cpuid_result &zero_zero );
 		void		 parse_cpuid_modern();
 
-		void		 create_domain_masks( APICID_BIT_LAYOUT_CTX *pApicidBitLayoutCtx );
-		void		 create_domain_masks();
-		unsigned int CreateTopologyShift( unsigned int count );
-		void		 PopulatePlatformApicIds( cpuid_result &CpuidRegisters );
+		unsigned int create_topology_shift( unsigned int count );
+		void		 populate_apic_ids( cpuid_result &CpuidRegisters );
 
-		void ThreeDomainFinalize( unsigned int PackageShift, unsigned int LogicalProcessorShift );
-		void ManyDomainFinalize( APICID_BIT_LAYOUT_CTX *pApicidBitLayoutCtx );
-		void finish_topology();
-
-		pair< string, string > getFmt() const noexcept;
+		void		 finish_topology();
 	};
 
 	/*

@@ -16,7 +16,7 @@ ostream& operator<<( ostream& s, const vector< T >& v )
 
 int main( int argc, const char* argv[] )
 {
-	cpu_topo   brot( false );
+	cpu_topo   brot;
 	const auto logical	= brot.countLevel( cpu_domain::LogicalDomain );
 	const auto physical = brot.countLevel( cpu_domain::CoreDomain );
 	cout << "logical:  " << logical << ",\n"
@@ -24,7 +24,7 @@ int main( int argc, const char* argv[] )
 		 << "modules:  " << brot.countLevel( cpu_domain::ModuleDomain ) << endl;
 	int tpl{ 8 };
 	for ( auto i: views::iota( 0ull, brot.cpu_ids.size() ) )
-		cout << format( "{:02d} = ", i ) << brot.id_string( i )
+		cout << format( "{:02d} = ", i ) << ( string ) brot.id( i )
 			 << ( --tpl ? ", " : ( tpl = 8, "\n" ) );
 
 	cout << endl << "optimal affinities: " << endl;
