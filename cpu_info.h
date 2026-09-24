@@ -133,6 +133,7 @@ namespace cpu_info
 	};
 
 #pragma endregion
+#pragma region interface functions
 
 	/* static interface functions:
 	 */
@@ -145,6 +146,9 @@ namespace cpu_info
 	 *	when using excessive threading in your application.
 	 */
 	extern void			setThreadAffinity( const id_list &target_ids );
+
+#pragma endregion
+#pragma region topology class
 
 	/*	cpu topology class:
 	 *	- runs 'the topology acquisition' code in the CTor,
@@ -188,4 +192,5 @@ namespace cpu_info
 
 		void		 finish_topology();
 	};
+#pragma endregion
 } // namespace cpu_info

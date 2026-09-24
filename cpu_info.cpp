@@ -23,7 +23,9 @@
 namespace cpu_info
 {
 	/* static */
-	int			 cpu_id::fmt_width{ 2 };
+	int cpu_id::fmt_width{ 2 };
+
+#pragma region external interface functions
 	/* static */
 	cpuid_result call_cpuid( unsigned int Leaf, unsigned int Subleaf ) noexcept
 	{
@@ -102,6 +104,11 @@ namespace cpu_info
 #endif
 		return NumberOfProcessors;
 	}
+
+	void setThreadAffinity( const id_list &target_ids ) {}
+
+#pragma endregion
+#pragma region topology class
 
 	cpu_topo::cpu_topo( bool force_legacy )
 	{
@@ -346,6 +353,5 @@ namespace cpu_info
 			cpu_ids.emplace_back( make_pair( apic_cpu_ids[ cpu ], id ) );
 		}
 	}
-
-	void setThreadAffinity( const id_list &target_ids ) {}
+#pragma endregion
 } // namespace cpu_info
