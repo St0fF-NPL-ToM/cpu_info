@@ -35,12 +35,13 @@ Inside your code, instantiate a `cpu_info` object.  It will run a complete query
 Then you may use the class' members directly (it's mostly open, besides, you could edit it), or ask a question:
 
 ```cpp
-	cpu_info info;
+	using namespace std;
+	cpu_info::cpu_topo info;
 	cout << "logical:  " << info.countLevel( cpu_domain::LogicalDomain ) << ",\n"
 	     << "physical: " << info.countLevel( cpu_domain::CoreDomain ) << ",\n"
 	     << "modules:  " << info.countLevel( cpu_domain::ModuleDomain ) << endl;
 	int tpl{8};
 	for (auto &id : info.cpu_ids)
-		cout << id << (--tpl ? ", " : (tpl = 8, "\n"));
+		cout << ( string ) id << (--tpl ? ", " : (tpl = 8, "\n"));
 	cout << endl;
 ```
