@@ -1,4 +1,4 @@
-# cpu_info 
+# cpu_info
 
 A small class for gathering CPU information, that most OS do not provide …
 
@@ -24,7 +24,13 @@ There are probably many options how to use the code at hand. Most obvious are:
 
 > NOTE: c++20 is required for compilation due to the use of `std::format` and `std::vformat`
 
-Inside your code, instantiate a `cpu_info` object.  It will run a complete query of your CPU infrastructure upon construction.
+Inside your code, instantiate a `cpu_info` object.  It will run a complete query of your CPU infrastructure upon construction:
+
+- query current thread's cpu capabilities to determine operation mode
+- query apic_ids of system processors
+- in case of "modern way available": cycle all CPUs to query their respective caps
+	- this will bind the calling thread to each system cpu one after each other
+	- taking some time to finish … so it's best to call it once and make the object globally available
 
 Then you may use the class' members directly (it's mostly open, besides, you could edit it), or ask a question:
 
