@@ -4,8 +4,19 @@
  * 				https://github.com/intel/SDM-Processor-Topology-Enumeration
  *
  * 				ported to a simple cpp class …
+ *
+ * Step #1✓:		simple cpu enumeration on a system with subclassing by CPU domains
+ * 				- query count of CPUs of a domain
+ * 				- retrieve (un)masked APIC IDs per cpu
+ * 	→ 	Solves the question of "how many threads do make sense in certain scenarios"
+ *		by comparing different level counts.
+ *	→	[x] feature-complete!
+ *
+ * 	Step #2✓:	query (if available) core_types (efficiency/performance etc.)
+ *
+ * 	Step #3✗:	also query "memory"-items, so scoring by shared / non-shared ids becomes possible.
+ *
  */
-
 #ifdef _WIN32
 #	define NOMINMAX
 #	include <Windows.h>
@@ -17,7 +28,9 @@
 
 #ifdef linux
 #	include <sched.h>
+#	include <unistd.h>
 #	include <sys/sysinfo.h>
+#	include <math.h>
 #endif
 
 namespace cpu_info
@@ -113,15 +126,14 @@ namespace cpu_info
 	cpu_topo::cpu_topo( bool force_legacy )
 	{
 		// For initialization, setup globals
-		auto CpuidRegisters = call_cpuid( 0, 0 );
-		populate_apic_ids( CpuidRegisters );
-		if ( CpuidRegisters.x.Register.Eax < 0xB || force_legacy )
-			parse_cpuid_legacy( CpuidRegisters );
+		auto cpuid00 = call_cpuid( 0, 0 );
+		if ( cpuid00.x.Register.Eax < 0xB || force_legacy ) parse_cpuid_legacy( cpuid00 );
 		else
 		{
-			sourceLeaf = CpuidRegisters.x.Register.Eax >= 0x1F ? 0x1F : 0x0B;
+			sourceLeaf = cpuid00.x.Register.Eax >= 0x1F ? 0x1F : 0x0B;
 			parse_cpuid_modern();
 		}
+		build_up_apic_ids( cpuid00 );
 		finish_topology();
 	}
 
@@ -271,22 +283,23 @@ namespace cpu_info
 		return Shift;
 	}
 
-	void cpu_topo::populate_apic_ids( cpuid_result &CpuidRegisters )
+	void cpu_topo::build_up_apic_ids( cpuid_result &Leaf0 )
 	{
-		// Determine X2APIC ID or fall back to APIC ID.
 		auto NumberOfProcessors{ get_logical_cpu_count() };
-		auto id{ std::min( CpuidRegisters.x.Register.Eax, 0x1Fu ) };
-
 		cpu_id::fmt_width = int( log2( NumberOfProcessors - 1 ) / 4 ) + 1;
+
+		// Determine X2APIC ID or fall back to APIC ID.
+		auto		 id{ std::min( Leaf0.x.Register.Eax, 0x1Fu ) };
+		cpuid_result NativeModelIDEnumerationLeaf{};
 		// is this really necessary?
 		if ( NumberOfProcessors > MAX_PROCESSORS ) NumberOfProcessors = MAX_PROCESSORS;
 
 		if ( id < 0x1fu && ( id = std::min( id, 0xbu ) ) < 0x0b ) id = 1;
-		apic_cpu_ids.clear();
+
 		for ( auto Index{ 0u }; Index < NumberOfProcessors; Index++ )
 		{
 			bind_thread_to_cpu( Index );
-			unsigned int ApicId{ UINT_MAX };
+			apic_id		 ApicId{ UINT_MAX };
 			cpuid_result CpuidRegistersApicid{ call_cpuid( id, 0 ) };
 			if ( id == 0x1F )
 			{
@@ -302,14 +315,44 @@ namespace cpu_info
 			}
 			if ( id == 1 ) // Fall back to Legacy 8 bit APIC ID.
 				ApicId = ( CpuidRegistersApicid.x.Register.Ebx >> 24 );
-			apic_cpu_ids.push_back( ApicId );
+
+			auto &item = cpu_ids.emplace_back(
+				Leaf0.x.Register.Eax, ApicId, id == 1 ? CpuidRegistersApicid : call_cpuid( 1, 0 ) );
+
+			/* Check for extended information on this specific logical core using LEAF 0x1A
+			 * This leaf exists on all hybrid parts, however this leaf is not only available on
+			 * hybrid parts. The following algorithm is used for detection of this leaf:
+			 *		If CPUID.0.MAXLEAF ≥ 1AH and CPUID.1A.EAX ≠ 0, then the leaf exists.
+			 */
+			if ( Leaf0.x.Register.Eax >= 0x1A
+				 && ( NativeModelIDEnumerationLeaf = call_cpuid( 0x1a, 0 ) ).x.Register.Eax )
+			{
+				//	EAX enumerates the native model ID and core type:
+				//		Bits 31-24: Core type* 	10H:Reserved
+				//								20H:Intel Atom®
+				//								30H: Reserved
+				//								40H: Intel® CoreTM
+				//		Bits 23-00: Native model ID of the core.
+				// 					The core-type and native model ID can be used to uniquely
+				// 					identify the microarchitecture of the core. This native model ID
+				// 					is not unique across core types, and not related to the model
+				//					ID reported in CPUID leaf 01H, and does not identify the SOC.
+				// 					*	The core type may only be used as an identification of the
+				// 						microarchitecture for this logical processor and its numeric
+				// 						value has no significance, neither large nor small. This
+				// 						field neither implies nor expresses any other attribute to
+				// 						this logical processor and software should not assume any.
+				// 	EBX Reserved. ECX Reserved. EDX Reserved.
+				item.core_type = NativeModelIDEnumerationLeaf.x.Register.Eax >> 24;
+				item.model_id  = NativeModelIDEnumerationLeaf.x.Register.Eax & 0xffffff;
+			}
 		}
 	}
 
 	void cpu_topo::finish_topology()
 	{
 		unsigned	index{}, nxt_index{}, prev_bit{}, top_domain{ ( unsigned ) abl.size() };
-		unsigned	domain_shift, cpu_cnt{ ( unsigned ) apic_cpu_ids.size() };
+		unsigned	domain_shift, cpu_cnt{ ( unsigned ) cpu_ids.size() };
 		const auto &ca{ abl };
 		for ( ; index < top_domain; ++index )
 		{
@@ -319,8 +362,9 @@ namespace cpu_info
 		for ( index = 0u; index < top_domain; ++index )
 			for ( nxt_index = index + 1; nxt_index <= top_domain; ++nxt_index )
 				abl[ index ].relative_masks.emplace(
-					nxt_index, ( ~ca[ nxt_index ].relative_masks[ nxt_index ] )
-								   & ( ca[ index ].relative_masks[ index ] ) );
+					nxt_index,
+					( ~ca[ nxt_index ].relative_masks[ nxt_index ] )
+						& ( ca[ index ].relative_masks[ index ] ) );
 
 		// produce topology masks depending on what we got
 		for ( ; index <= top_domain; index++ )
@@ -340,17 +384,16 @@ namespace cpu_info
 				if ( ca[ index ].shift != 0 )
 				{
 					const auto domain_index =
-						( ca[ index ].relative_masks[ top_domain ] & apic_cpu_ids[ cpu ] )
+						( ca[ index ].relative_masks[ top_domain ] & cpu_ids[ cpu ].id )
 						>> domain_shift;
 					lvl_ids[ index ][ domain_index ]++;
 					id.push_back( domain_index );
 				}
 				domain_shift = abl[ index ].shift;
 			}
-			lvl_ids[ index ]
-				   [ ( ca[ top_domain ].relative_masks[ top_domain ] & apic_cpu_ids[ cpu ] )
-					 >> ca[ top_domain - 1 ].shift ]++;
-			cpu_ids.emplace_back( make_pair( apic_cpu_ids[ cpu ], id ) );
+			lvl_ids[ index ][ ( ca[ top_domain ].relative_masks[ top_domain ] & cpu_ids[ cpu ].id )
+							  >> ca[ top_domain - 1 ].shift ]++;
+			cpu_ids[ cpu ].masked_ids = id;
 		}
 	}
 #pragma endregion
