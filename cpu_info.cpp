@@ -118,7 +118,7 @@ namespace cpu_info
 		// step #1: remember current thread affinity. (and bind to first CPU)
 		auto AppAffinity = bind_thread_to_cpu( 0 );
 		if ( AppAffinity.empty() )
-			throw exception( "cannot switch cpu affinity, no fallback available.", -1 );
+			throw "cannot switch cpu affinity, no fallback available.";
 		else
 		{
 			// step #2: collect all cpuid-leafs on all logical cpus
@@ -278,7 +278,7 @@ namespace cpu_info
 	const cpu_id &cpu_topo::id( size_t index ) const
 	{
 		if ( index < cpu_ids.size() ) return cpu_ids[ index ];
-		throw exception( "cpu_id index out of bounds" );
+		throw "cpu_id index out of bounds";
 	}
 
 	id_list cpu_topo::optimalProcessAffinity( int thread_count, bool prefer_performance )

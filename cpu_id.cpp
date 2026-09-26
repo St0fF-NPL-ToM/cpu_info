@@ -8,7 +8,6 @@
  *  This is the header of the cpu_id subclass, also implementing the cpuid
  *  instruction operations.
  */
-#pragma once
 
 #ifdef _WIN32
 #	define NOMINMAX
