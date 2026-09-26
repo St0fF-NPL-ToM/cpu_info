@@ -5,7 +5,7 @@ project( cpu_info VERSION 0.0.1 LANGUAGES CXX )
 set( CMAKE_CXX_STANDARD 23 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
-add_library( cpu_info cpu_info.h cpu_info.cpp cpu_info.natvis )
+add_library( cpu_info cpu_info.h cpu_info.cpp cpu_info.natvis cpu_id.h cpu_id.cpp  "cpu_enums.h")
 add_library( cpu_info::cpu_info ALIAS cpu_info )
 target_include_directories( cpu_info PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/>

@@ -23,8 +23,8 @@
 #endif
 
 #include "cpu_info.h"
-#include <list>
 #include <ranges>
+#include <algorithm>
 
 #ifdef linux
 #	include <sched.h>
@@ -35,78 +35,8 @@
 
 namespace cpu_info
 {
-	/* static */
-	int cpu_id::fmt_width{ 2 };
-
 #pragma region external interface functions
-	/* static */
-	cpuid_result call_cpuid( unsigned int Leaf, unsigned int Subleaf ) noexcept
-	{
-		cpuid_result CpuidRegisters{};
-#if _WIN32
-		__cpuidex( reinterpret_cast< int * >( &CpuidRegisters.x.Registers[ 0 ] ), Leaf, Subleaf );
 
-#elif linux
-		unsigned int ReturnEax;
-		unsigned int ReturnEbx;
-		unsigned int ReturnEcx;
-		unsigned int ReturnEdx;
-
-		asm( "movl %4, %%eax\n"
-			 "movl %5, %%ecx\n"
-			 "CPUID\n"
-			 "movl %%eax, %0\n"
-			 "movl %%ebx, %1\n"
-			 "movl %%ecx, %2\n"
-			 "movl %%edx, %3\n"
-			 : "=r"( ReturnEax ), "=r"( ReturnEbx ), "=r"( ReturnEcx ), "=r"( ReturnEdx )
-			 : "r"( Leaf ), "r"( Subleaf )
-			 : "%eax", "%ebx", "%ecx", "%edx" );
-
-		CpuidRegisters.x.Register.Eax = ReturnEax;
-		CpuidRegisters.x.Register.Ebx = ReturnEbx;
-		CpuidRegisters.x.Register.Ecx = ReturnEcx;
-		CpuidRegisters.x.Register.Edx = ReturnEdx;
-#else
-#endif
-		return CpuidRegisters;
-	}
-	/* static */
-	void bind_thread_to_cpu( unsigned ProcessorNumber )
-	{
-#ifdef _WIN32
-		GROUP_AFFINITY GroupAffinity{};
-		unsigned short GroupIndex{ 0u };
-		unsigned short MaxGroups{ GetActiveProcessorGroupCount() };
-		unsigned int   NumberOfGroupProcessors;
-		// Assume the active groups are going to be contiguous.
-		for ( ; GroupIndex < MaxGroups; GroupIndex++ )
-			if ( auto NumberOfGroupProcessors = GetActiveProcessorCount( GroupIndex );
-				 ProcessorNumber < NumberOfGroupProcessors )
-			{
-				GroupAffinity.Group = GroupIndex;
-				GroupAffinity.Mask = ( KAFFINITY ) ( ( ULONG64 ) 1 << ( ULONG64 ) ProcessorNumber );
-				SetThreadGroupAffinity( GetCurrentThread(), &GroupAffinity, NULL );
-				break;
-			} else ProcessorNumber = ProcessorNumber - NumberOfGroupProcessors;
-#elif defined linux
-		// Get the size of the maximum number of configured processors.
-		auto NumberOfProcessors{ get_nprocs_conf() };
-		// Something larger comes in we will just go with it.
-		if ( ProcessorNumber > NumberOfProcessors ) NumberOfProcessors = ProcessorNumber;
-
-		if ( auto *cpu_set = CPU_ALLOC( NumberOfProcessors ) )
-		{
-			const auto SetSize = CPU_ALLOC_SIZE( NumberOfProcessors );
-			CPU_ZERO_S( SetSize, cpu_set );
-			CPU_SET_S( ProcessorNumber, SetSize, cpu_set );
-			sched_setaffinity( getpid(), SetSize, cpu_set );
-			CPU_FREE( cpu_set );
-		}
-#else
-#endif
-	}
-	/* static */
 	unsigned get_logical_cpu_count( void ) noexcept
 	{
 		unsigned NumberOfProcessors{ 1u };
@@ -118,156 +48,212 @@ namespace cpu_info
 		return NumberOfProcessors;
 	}
 
-	void setThreadAffinity( const id_list &target_ids ) {}
+	id_list setThreadAffinity( const id_list &target_ids )
+	{
+		id_list result;
+#ifdef _WIN32
+		// Assume the active groups are going to be contiguous.
+		GROUP_AFFINITY ga{}, prev{};
+		auto		   ct = GetCurrentThread();
+		auto		   MaxGroups{ GetActiveProcessorGroupCount() }, selGi{ UINT16_MAX };
+		auto		   ProcessorNumber{ 0u };
+		// build an affinity mask for the given set of cpus
+		for ( uint16_t GroupIndex{ 0u }; GroupIndex < MaxGroups; GroupIndex++ )
+		{
+			uint32_t NumberOfGroupProcessors = GetActiveProcessorCount( GroupIndex );
+			for ( auto GroupProcessorNumber{ 0u }; GroupProcessorNumber < NumberOfGroupProcessors;
+				  ++GroupProcessorNumber, ++ProcessorNumber )
+			{
+				if ( find( target_ids.begin(), target_ids.end(), ProcessorNumber )
+					 != target_ids.end() )
+				{
+					if ( selGi == UINT16_MAX ) selGi = ga.Group = GroupIndex;
+					else if ( selGi != GroupIndex )
+						break; // next group started - cannot use further ids
+					ga.Mask |= ( KAFFINITY ) ( ( ULONG64 ) 1 << ( ULONG64 ) GroupProcessorNumber );
+				}
+			}
+		}
+		// set affinity, retrieving previous mask
+		if ( SetThreadGroupAffinity( ct, &ga, &prev ) )
+		{
+			// calculate cpu numbers used in previous affinity mask
+			ProcessorNumber = 0u;
+			for ( uint16_t GroupIndex{ 0u }; GroupIndex < MaxGroups; GroupIndex++ )
+				if ( auto NumberOfGroupProcessors = GetActiveProcessorCount( GroupIndex );
+					 prev.Group != GroupIndex )
+					ProcessorNumber += NumberOfGroupProcessors;
+				else
+					for ( int i{ 0 }; i < sizeof( prev.Mask ) * 8; ++i )
+						if ( prev.Mask & ( 1 << i ) ) result.push_back( ProcessorNumber + i );
+		}
+
+#elif defined linux
+		// Get the size of the maximum number of configured processors.
+		auto NumberOfProcessors{ get_nprocs_conf() };
+		if ( auto *cpu_set = CPU_ALLOC( NumberOfProcessors ) )
+		{
+			const auto pid	   = getpid();
+			const auto SetSize = CPU_ALLOC_SIZE( NumberOfProcessors );
+			CPU_ZERO_S( SetSize, cpu_set );
+			sched_getaffinity( pid, SetSize, cpu_set );
+			for ( auto i: views::iota( 0, NumberOfProcessors ) )
+				if ( CPU_ISSET_S( i, SetSize, cpu_set ) ) result.push_back( i );
+			CPU_ZERO_S( SetSize, cpu_set );
+			for ( auto &i: target_ids )
+				if ( i < NumberOfProcessors ) CPU_SET_S( i, SetSize, cpu_set );
+			// non-zero result is failure …
+			if ( sched_setaffinity( pid, SetSize, cpu_set ) ) result.clear();
+			CPU_FREE( cpu_set );
+		}
+#endif
+		return result;
+	}
 
 #pragma endregion
 #pragma region topology class
 
-	cpu_topo::cpu_topo( bool force_legacy )
+	cpu_topo::cpu_topo()
 	{
-		// For initialization, setup globals
-		auto cpuid00 = call_cpuid( 0, 0 );
-		if ( cpuid00.x.Register.Eax < 0xB || force_legacy ) parse_cpuid_legacy( cpuid00 );
+		// step #1: remember current thread affinity. (and bind to first CPU)
+		auto AppAffinity = bind_thread_to_cpu( 0 );
+		if ( AppAffinity.empty() )
+			throw exception( "cannot switch cpu affinity, no fallback available.", -1 );
 		else
 		{
-			sourceLeaf = cpuid00.x.Register.Eax >= 0x1F ? 0x1F : 0x0B;
-			parse_cpuid_modern();
+			// step #2: collect all cpuid-leafs on all logical cpus
+			build_idlist();
+			// reset CPU affinity to before
+			setThreadAffinity( AppAffinity );
+			// step #3: parse topology
+			parse_topology();
 		}
-		build_up_apic_ids( cpuid00 );
-		finish_topology();
 	}
 
-	int cpu_topo::countLevel( cpu_domain lvl ) const noexcept
+	void cpu_topo::build_idlist()
 	{
-		if ( lvl == cpu_domain::InvalidDomain || lvl_ids.size() < ( size_t ) lvl ) return 1;
-		return lvl_ids[ lvl - 1 ].size();
-	}
-
-	cpu_id cpu_topo::id( size_t index ) const noexcept
-	{
-		cpu_id result;
-		if ( index < cpu_ids.size() ) result = cpu_ids[ index ];
-		return result;
-	}
-
-	id_list cpu_topo::optimalProcessAffinity( int thread_count, bool prefer_performance )
-	{
-		id_list ids;
-		// prefer_performance means cores, that do not share logical CPUs
-		if ( prefer_performance )
+		const auto cnt = get_logical_cpu_count();
+		for ( auto n: views::iota( 0u, cnt ) )
 		{
-		} else
-		{}
-		return ids;
+			bind_thread_to_cpu( n );
+			cpu_ids.emplace_back();
+		}
 	}
 
-	void cpu_topo::parse_cpuid_legacy( const cpuid_result &zero_zero )
+	void cpu_topo::parse_topology()
 	{
-		unsigned int MaximumAddressibleIdsPhysicalPackage{ 1 };
-		unsigned int MaximumAddressibleIdsCores{};
-		unsigned int LogicalProcessorsPerCore{ 1 };
-		unsigned int LogicalProcessorsPerPackage{ 1 };
-		unsigned int PackageShift{};
-		unsigned int LogicalProcessorShift{};
-		cpuid_result CpuidRegisters{ call_cpuid( 1, 0 ) };
-		/*  MaximumAddressibleIdsPhysicalPackage
-		 *
-		 *      CPUID.1.EBX[23:16]
-		 *      Maximum number of addressable IDs for logical processors in this physical package
-		 *
-		 *  This is the legacy value for determining the package mask and has been superceded by
-		 * Leaf 0Bh and Leaf 01Fh. Since this is a byte, processors are already exceeding 256
-		 * addressible IDs either due to topology domains or simply having more processors in a
-		 * package.
-		 *
-		 *      CPUID.1.EDX[28].HTT
-		 *      The Maximum number of addressable IDs for logical processor in this package is valid
-		 * when set to 1.
-		 */
-
-		// Determine that CPUID.1.EDX[28].HTT == 1, if this is not set it would be a very old
-		// platform.
-		if ( CpuidRegisters.x.Register.Edx & ( ( unsigned int ) 1 << 28 ) )
+		auto	  &cpu0 = cpu_ids.front();
+		// first step: parse available information
+		const auto maxp = cpu0.max_leafs();
+		sourceLeaf		= ( maxp < 0xB ) ? 1u : ( maxp < 0x1f ) ? 0x0b : 0x1f;
+		if ( sourceLeaf == 1 )
 		{
-			MaximumAddressibleIdsPhysicalPackage =
-				( unsigned int ) ( ( CpuidRegisters.x.Register.Ebx >> 16 ) & 0xFF );
-			// This would be a 20+ year old platform to not support CPUID.4
-			if ( zero_zero.x.Register.Eax >= 4 )
-			{
-				/* MaximumAddressibleIdsCores
-				 *
-				 *      CPUID.4.0.EAX[31:26]
-				 *       Maximum number of addressable IDs for processor cores in the physical
-				 * Package
-				 *
-				 *  This is the legacy value for determining the core/SMT mask and has been
-				 * superceded by Leaf 0Bh and Leaf 01Fh. Since this is 6 bits, processors are
-				 * already exceeding this value addressible IDs either due to topology domains or
-				 *  simply having more processors in a package.
-				 */
-				MaximumAddressibleIdsCores =
-					( unsigned int ) ( call_cpuid( 4, 0 ).x.Register.Eax >> 26 ) + 1;
-				// Determine the number of LogicalProcessors per core.
-				LogicalProcessorsPerCore =
-					MaximumAddressibleIdsPhysicalPackage / MaximumAddressibleIdsCores;
-				LogicalProcessorsPerPackage = MaximumAddressibleIdsPhysicalPackage;
-				LogicalProcessorShift		= create_topology_shift( LogicalProcessorsPerCore );
-				PackageShift				= create_topology_shift( LogicalProcessorsPerPackage );
-			} else
-			{ // You cannot report Cores here, a Package == Core and so this only reports SMT within
-			  // a Package.
-				LogicalProcessorsPerCore	= MaximumAddressibleIdsPhysicalPackage;
-				LogicalProcessorsPerPackage = MaximumAddressibleIdsPhysicalPackage;
-
-				LogicalProcessorShift		= PackageShift =
-					create_topology_shift( MaximumAddressibleIdsPhysicalPackage );
-			}
-		} else // You do not report Cores or SMT here.  It's always 1 Logical Processor.
-			LogicalProcessorShift = PackageShift =
-				create_topology_shift( MaximumAddressibleIdsPhysicalPackage );
-
-		abl.emplace_back( LogicalDomain, LogicalProcessorShift, mask_map{} );
-		abl.emplace_back( CoreDomain, PackageShift, mask_map{} );
-		abl.top_domain = ModuleDomain;
-	}
-
-	void cpu_topo::parse_cpuid_modern()
-	{
-		unsigned int Subleaf{ 0 };
-		unsigned int DomainType{};
-		unsigned int DomainShift{};
-		cpuid_result CpuidRegisters{ call_cpuid( sourceLeaf, Subleaf ) };
-
-		while ( CpuidRegisters.x.Register.Ebx != 0 )
-		{
-			// CPUID.B or 1F.x.ECX[15:8] = Level Type / Domain Type
-			DomainType	= ( CpuidRegisters.x.Register.Ecx >> 8 ) & 0xFF;
-			// CPUID.B or 1F.x.EAX[4:0] = Level Shift / Domain Shift
-			DomainShift = CpuidRegisters.x.Register.Eax & 0x1F;
-			/*
-			 * Best to check for known domains explicity since the ones you use
-			 * may not be in sequential ordering.
+			/*  MaximumAddressibleIdsPhysicalPackage:	CPUID.1.EBX[23:16]
+			 *	requires:	CPUID.1.EDX[28].HTT == 1
 			 */
-			switch ( DomainType )
+			unsigned shf0, shf1;
+			if ( !cpu0( cpu_feature::HTT ) ) shf0 = shf1 = create_topology_shift( 1 );
+			else
 			{
-				case InvalidDomain:
-					/*  This would be an error, could log it. */
-				case LogicalDomain:
-				case CoreDomain:
-				case ModuleDomain:
-				case TileDomain:
-				case DieDomain:
-				case DieGrpDomain:
-					abl.emplace_back( ( cpu_domain ) DomainType, DomainShift, mask_map{} );
-					break;
-
-				default:
-					// First Domain is always Logical Processor, so we will always have a valid
-					// previous.
-					abl.back().shift = DomainShift;
-					abl.top_domain	 = ( cpu_domain ) DomainType;
+				auto MaximumAddressibleIdsPhysicalPackage =
+					( unsigned ) ( ( cpu0[ 1 ][ 0 ].e.bx >> 16 ) & 0xFF );
+				if ( cpu0.max_leafs() < 4 )
+				{ // This would be a 20+ year old platform to not support CPUID.4
+				  // You cannot report Cores here, a Package == Core and so this only reports SMT
+				  // within a Package.
+					shf0 = shf1 = create_topology_shift( MaximumAddressibleIdsPhysicalPackage );
+				} else
+				{ /* MaximumAddressibleIdsCores: CPUID.4.0.EAX[31:26] */
+					const auto MaximumAddressibleIdsCores =
+						( cpu0[ 4 ][ 0 ].e.ax >> 26 ) + 1;
+					// Determine the number of LogicalProcessors per core.
+					const auto LogicalProcessorsPerCore =
+						MaximumAddressibleIdsPhysicalPackage / MaximumAddressibleIdsCores;
+					const auto LogicalProcessorsPerPackage = MaximumAddressibleIdsPhysicalPackage;
+					shf0 = create_topology_shift( LogicalProcessorsPerCore );
+					shf1 = create_topology_shift( LogicalProcessorsPerPackage );
+				}
 			}
-			CpuidRegisters = call_cpuid( sourceLeaf, ++Subleaf );
+			abl.emplace_back( LogicalDomain, shf0, mask_map{} );
+			abl.emplace_back( CoreDomain, shf1, mask_map{} );
+			abl.top_domain = ModuleDomain;
+		} else
+		{
+			const auto &sl = cpu0[ sourceLeaf ];
+			for ( unsigned sub{ 0 }; sl[ sub ].e.bx != 0; ++sub )
+			{
+				// CPUID.B or 1F.x.ECX[15:8] = Level Type / Domain Type
+				const auto DomainType  = ( sl[ sub ].e.cx >> 8 ) & 0xFF;
+				// CPUID.B or 1F.x.EAX[4:0] = Level Shift / Domain Shift
+				const auto DomainShift = sl[ sub ].e.ax & 0x1F;
+				/*
+				 * Best to check for known domains explicity since
+				 * the ones you use may not be in sequential ordering.
+				 */
+				switch ( DomainType )
+				{
+					case InvalidDomain:
+						/*  This would be an error, could log it. */
+					case LogicalDomain:
+					case CoreDomain:
+					case ModuleDomain:
+					case TileDomain:
+					case DieDomain:
+					case DieGrpDomain:
+						abl.emplace_back( ( cpu_domain ) DomainType, DomainShift, mask_map{} );
+						break;
+						// First Domain is always Logical Processor,
+						// so we will always have a valid previous.
+					default:
+						abl.back().shift = DomainShift;
+						abl.top_domain	 = ( cpu_domain ) DomainType;
+				}
+			}
+		}
+		// second step: produce relative apic_id_masks from retrieved information
+		unsigned	index{}, nxt_index{}, prev_bit{}, top_domain{ ( unsigned ) abl.size() };
+		unsigned	domain_shift, cpu_cnt{ ( unsigned ) cpu_ids.size() };
+		const auto &ca{ abl };
+		for ( ; index < top_domain; ++index )
+		{
+			abl[ index ].relative_masks.emplace( index, ~( ( 1 << prev_bit ) - 1 ) );
+			prev_bit = ca[ index ].shift;
+		}
+		for ( index = 0u; index < top_domain; ++index )
+			for ( nxt_index = index + 1; nxt_index <= top_domain; ++nxt_index )
+				abl[ index ].relative_masks.emplace(
+					nxt_index,
+					( ~ca[ nxt_index ].relative_masks[ nxt_index ] )
+						& ( ca[ index ].relative_masks[ index ] ) );
+		// produce topology masks depending on what we got
+		for ( ; index <= top_domain; index++ )
+			if ( ca[ index ].shift != 0 )
+				level_masks_names.emplace(
+					ca[ index ].domain,
+					make_pair( ca[ index ].relative_masks[ index ],
+							   index == top_domain ? "_pkg_"
+												   : lvl_base_names[ ca[ index ].domain ] ) );
+		// at last, build the counter-map and update all cpu_ids
+		lvl_ids.resize( top_domain + 1 );
+		for ( unsigned cpu{}; cpu < cpu_cnt; cpu++ )
+		{
+			id_list id;
+			for ( index = 0, domain_shift = 0; index < top_domain; index++ )
+			{
+				if ( ca[ index ].shift != 0 )
+				{
+					const auto domain_index =
+						( ca[ index ].relative_masks[ top_domain ] & ( apic_id ) cpu_ids[ cpu ] )
+						>> domain_shift;
+					lvl_ids[ index ][ domain_index ]++;
+					id.push_back( domain_index );
+				}
+				domain_shift = abl[ index ].shift;
+			}
+			lvl_ids[ index ]
+				   [ ( ca[ top_domain ].relative_masks[ top_domain ] & ( apic_id ) cpu_ids[ cpu ] )
+					 >> ca[ top_domain - 1 ].shift ]++;
+			cpu_ids[ cpu ].masked_ids = id;
 		}
 	}
 
@@ -283,118 +269,28 @@ namespace cpu_info
 		return Shift;
 	}
 
-	void cpu_topo::build_up_apic_ids( cpuid_result &Leaf0 )
+	int cpu_topo::countLevel( cpu_domain lvl ) const noexcept
 	{
-		auto NumberOfProcessors{ get_logical_cpu_count() };
-		cpu_id::fmt_width = int( log2( NumberOfProcessors - 1 ) / 4 ) + 1;
-
-		// Determine X2APIC ID or fall back to APIC ID.
-		auto		 id{ std::min( Leaf0.x.Register.Eax, 0x1Fu ) };
-		cpuid_result NativeModelIDEnumerationLeaf{};
-		// is this really necessary?
-		if ( NumberOfProcessors > MAX_PROCESSORS ) NumberOfProcessors = MAX_PROCESSORS;
-
-		if ( id < 0x1fu && ( id = std::min( id, 0xbu ) ) < 0x0b ) id = 1;
-
-		for ( auto Index{ 0u }; Index < NumberOfProcessors; Index++ )
-		{
-			bind_thread_to_cpu( Index );
-			apic_id		 ApicId{ UINT_MAX };
-			cpuid_result CpuidRegistersApicid{ call_cpuid( id, 0 ) };
-			if ( id == 0x1F )
-			{
-				if ( CpuidRegistersApicid.x.Register.Ebx != 0 )
-					ApicId = CpuidRegistersApicid.x.Register.Edx;
-				else CpuidRegistersApicid = call_cpuid( ( id = 0x0bu ), 0 );
-			}
-			if ( id == 0x0B )
-			{
-				if ( CpuidRegistersApicid.x.Register.Ebx != 0 )
-					ApicId = CpuidRegistersApicid.x.Register.Edx;
-				else CpuidRegistersApicid = call_cpuid( ( id = 1 ), 0 );
-			}
-			if ( id == 1 ) // Fall back to Legacy 8 bit APIC ID.
-				ApicId = ( CpuidRegistersApicid.x.Register.Ebx >> 24 );
-
-			auto &item = cpu_ids.emplace_back(
-				Leaf0.x.Register.Eax, ApicId, id == 1 ? CpuidRegistersApicid : call_cpuid( 1, 0 ) );
-
-			/* Check for extended information on this specific logical core using LEAF 0x1A
-			 * This leaf exists on all hybrid parts, however this leaf is not only available on
-			 * hybrid parts. The following algorithm is used for detection of this leaf:
-			 *		If CPUID.0.MAXLEAF ≥ 1AH and CPUID.1A.EAX ≠ 0, then the leaf exists.
-			 */
-			if ( Leaf0.x.Register.Eax >= 0x1A
-				 && ( NativeModelIDEnumerationLeaf = call_cpuid( 0x1a, 0 ) ).x.Register.Eax )
-			{
-				//	EAX enumerates the native model ID and core type:
-				//		Bits 31-24: Core type* 	10H:Reserved
-				//								20H:Intel Atom®
-				//								30H: Reserved
-				//								40H: Intel® CoreTM
-				//		Bits 23-00: Native model ID of the core.
-				// 					The core-type and native model ID can be used to uniquely
-				// 					identify the microarchitecture of the core. This native model ID
-				// 					is not unique across core types, and not related to the model
-				//					ID reported in CPUID leaf 01H, and does not identify the SOC.
-				// 					*	The core type may only be used as an identification of the
-				// 						microarchitecture for this logical processor and its numeric
-				// 						value has no significance, neither large nor small. This
-				// 						field neither implies nor expresses any other attribute to
-				// 						this logical processor and software should not assume any.
-				// 	EBX Reserved. ECX Reserved. EDX Reserved.
-				item.core_type = NativeModelIDEnumerationLeaf.x.Register.Eax >> 24;
-				item.model_id  = NativeModelIDEnumerationLeaf.x.Register.Eax & 0xffffff;
-			}
-		}
+		if ( lvl == cpu_domain::InvalidDomain || lvl_ids.size() < ( size_t ) lvl ) return 1;
+		return lvl_ids[ lvl - 1 ].size();
 	}
 
-	void cpu_topo::finish_topology()
+	const cpu_id &cpu_topo::id( size_t index ) const
 	{
-		unsigned	index{}, nxt_index{}, prev_bit{}, top_domain{ ( unsigned ) abl.size() };
-		unsigned	domain_shift, cpu_cnt{ ( unsigned ) cpu_ids.size() };
-		const auto &ca{ abl };
-		for ( ; index < top_domain; ++index )
-		{
-			abl[ index ].relative_masks.emplace( index, ~( ( 1 << prev_bit ) - 1 ) );
-			prev_bit = ca[ index ].shift;
-		}
-		for ( index = 0u; index < top_domain; ++index )
-			for ( nxt_index = index + 1; nxt_index <= top_domain; ++nxt_index )
-				abl[ index ].relative_masks.emplace(
-					nxt_index,
-					( ~ca[ nxt_index ].relative_masks[ nxt_index ] )
-						& ( ca[ index ].relative_masks[ index ] ) );
-
-		// produce topology masks depending on what we got
-		for ( ; index <= top_domain; index++ )
-			if ( ca[ index ].shift != 0 )
-				level_masks_names.emplace(
-					ca[ index ].domain,
-					make_pair( ca[ index ].relative_masks[ index ],
-							   index == top_domain ? "_pkg_"
-												   : lvl_base_names[ ca[ index ].domain ] ) );
-
-		lvl_ids.resize( top_domain + 1 );
-		for ( unsigned cpu{}; cpu < cpu_cnt; cpu++ )
-		{
-			id_list id;
-			for ( index = 0, domain_shift = 0; index < top_domain; index++ )
-			{
-				if ( ca[ index ].shift != 0 )
-				{
-					const auto domain_index =
-						( ca[ index ].relative_masks[ top_domain ] & cpu_ids[ cpu ].id )
-						>> domain_shift;
-					lvl_ids[ index ][ domain_index ]++;
-					id.push_back( domain_index );
-				}
-				domain_shift = abl[ index ].shift;
-			}
-			lvl_ids[ index ][ ( ca[ top_domain ].relative_masks[ top_domain ] & cpu_ids[ cpu ].id )
-							  >> ca[ top_domain - 1 ].shift ]++;
-			cpu_ids[ cpu ].masked_ids = id;
-		}
+		if ( index < cpu_ids.size() ) return cpu_ids[ index ];
+		throw exception( "cpu_id index out of bounds" );
 	}
+
+	id_list cpu_topo::optimalProcessAffinity( int thread_count, bool prefer_performance )
+	{
+		id_list ids;
+		// prefer_performance means cores, that do not share logical CPUs
+		if ( prefer_performance )
+		{
+		} else
+		{}
+		return ids;
+	}
+
 #pragma endregion
 } // namespace cpu_info
