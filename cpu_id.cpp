@@ -236,7 +236,7 @@ namespace cpu_info
 	cpu_core_type cpu_id::coreType() const noexcept
 	{
 		if ( size() >= 0x1a ) return cpu_core_type( at( 0x1a )[ 0 ].e.ax >> 24 );
-		else return cpu_core_type::RESERVED1;
+		else return cpu_core_type::DUNNO;
 	}
 
 	unsigned cpu_id::coreModel() const noexcept

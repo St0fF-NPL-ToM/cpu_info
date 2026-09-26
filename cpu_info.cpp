@@ -226,7 +226,7 @@ namespace cpu_info
 					( ~ca[ nxt_index ].relative_masks[ nxt_index ] )
 						& ( ca[ index ].relative_masks[ index ] ) );
 		// produce topology masks depending on what we got
-		for ( ; index <= top_domain; index++ )
+		for ( index = 0u; index <= top_domain; index++ )
 			if ( ca[ index ].shift != 0 )
 				level_masks_names.emplace(
 					ca[ index ].domain,

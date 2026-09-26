@@ -140,7 +140,7 @@ namespace cpu_info
 	/*
 	 *	CORE_TYPE field
 	 */
-	#define CORE_TYPE( X ) X( RESERVED1, 0x10 ) X( Atom, 0x20 ) X( RESERVED3, 0x30 ) X( CoreI, 0x40 )
+	#define CORE_TYPE( X ) X( DUNNO, 0 ) X( RESRV, 0x10 ) X( AtomR, 0x20 ) X( R3SRV, 0x30 ) X( CoreI, 0x40 )
 	#define X( name, n ) name = n,
 	enum cpu_core_type { CORE_TYPE( X ) };
 	#undef X

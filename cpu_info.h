@@ -25,6 +25,8 @@
  *	→	[x] feature-complete!
  *
  * 	Step #2✓:	query (if available) core_types (efficiency/performance etc.)
+ *				→ class will enumerate all available CPUIDs ON EVERY SINGLE LOGICAL CPU
+ *				→ query caps extended to all feature-bits found in the intel docs,
  *
  * 	Step #3✗:	also query "memory"-items, so scoring by shared / non-shared ids becomes possible.
  * */
