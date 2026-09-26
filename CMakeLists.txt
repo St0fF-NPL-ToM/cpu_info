@@ -5,12 +5,19 @@ project( cpu_info VERSION 0.0.1 LANGUAGES CXX )
 set( CMAKE_CXX_STANDARD 23 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
-add_library( cpu_info cpu_info.h cpu_info.cpp cpu_info.natvis cpu_id.h cpu_id.cpp  "cpu_enums.h")
+set( SOURCES cpu_info.cpp cpu_id.cpp )
+set( HEADERS cpu_info.h cpu_id.h cpu_enums.h )
+set( DOCS ReadMe.md cpu_info.natvis )
+
+add_library( cpu_info ${HEADERS} ${SOURCES} ${DOCS} )
 add_library( cpu_info::cpu_info ALIAS cpu_info )
 target_include_directories( cpu_info PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/>
     $<INSTALL_INTERFACE:include>
 )
+source_group( DOCS FILES ${DOCS} )
+source_group( HDRS FILES ${HEADERS} )
+source_group( SRCS FILES ${SOURCES} )
 
 include( GNUInstallDirs )
 include( CMakePackageConfigHelpers )

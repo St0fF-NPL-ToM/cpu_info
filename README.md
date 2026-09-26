@@ -20,15 +20,20 @@ For a decade, simple CPUid was sufficient on desktop systems.  The next decade w
 
 There are probably many options how to use the code at hand. Most obvious are:
 - use FetchContent and link the library
-- import cpu_info.h and cpu_info.cpp into your build tree
+- import cpu_info's source files into your source tree (currently):
+    - cpu_info.h / cpp
+    - cpu_id.h / cpp
+    - cpu_enums.h
 
 > NOTE: c++20 is required for compilation due to the use of `std::format` and `std::vformat`
+
+> NOTE: file amount / source structure may change without notice
 
 Inside your code, instantiate a `cpu_info` object.  It will run a complete query of your CPU infrastructure upon construction:
 
 - query current thread's cpu capabilities to determine operation mode
-- query apic_ids of system processors
-- in case of "modern way available": cycle all CPUs to query their respective caps
+- cycle all CPUs to query their respective caps
+    - all cpuid - leafs, including apic_id
 	- this will bind the calling thread to each system cpu one after each other
 	- taking some time to finish … so it's best to call it once and make the object globally available
 
