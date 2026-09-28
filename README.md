@@ -14,16 +14,52 @@ This actually is the most asked question in multithreading, at least of those qu
 
 For a decade, simple CPUid was sufficient on desktop systems.  The next decade went with a 3-level-option.  Nowadays, it is indeed a good thing [vendors like intel provide example code](https://github.com/intel/SDM-Processor-Topology-Enumeration) to find those answers deterministically.
 
+Now, there is CPP20 and CPP23 with a lot of multithreading-helpers.  But it doesn't go as deep as affinity selection.  In other words: we get the playthings to create, but have to wait for those other playthings to optimize.
+
+---
+
+## Content
+
+This mini-lib is evolving, as I am working on Windows and Linux, it just takes time.
+
+### Current state
+
+***cpu_info:***
+
+- declares `cpu_info` namespace,
+- external interface functions,
+- and implements the cpu_topo class
+
+***cpu_id:***
+
+- declares the `cpuid_result` and implements the `cpuid`-call (Windows/Linux)
+- declares and implements `cpuid_leafs` as "all info of a single logical core we may get"
+- assembles this into a `cpu_id` class with specific query functions taylored to cpuid leafs
+- declares some helper structures
+
+### Future
+
+Plans are that this is not the end. As can be seen from the public (nyi) interface:
+
+```cpp
+		id_list		  optimalProcessAffinity( int thread_count, bool prefer_performance = true );
+```
+
+A `std::vector<int>` being passed back and forth may not be the best solution. But the "set cpu affinity"-functions are already existing.
+
+The idea is to make a portable `cpu_set` class, which can be passed by reference or pointer or even value. It is just a description of whatever the underlying kernel makes of it.
+
 ---
 
 ## How to use
 
 There are probably many options how to use the code at hand. Most obvious are:
+
 - use FetchContent and link the library
 - import cpu_info's source files into your source tree (currently):
-    - cpu_info.h / cpp
-    - cpu_id.h / cpp
-    - cpu_enums.h
+  - cpu_info.h / cpp
+  - cpu_id.h / cpp
+  - cpu_enums.h
 
 > NOTE: c++20 is required for compilation due to the use of `std::format` and `std::vformat`
 
@@ -33,9 +69,9 @@ Inside your code, instantiate a `cpu_info` object.  It will run a complete query
 
 - query current thread's cpu capabilities to determine operation mode
 - cycle all CPUs to query their respective caps
-    - all cpuid - leafs, including apic_id
-	- this will bind the calling thread to each system cpu one after each other
-	- taking some time to finish … so it's best to call it once and make the object globally available
+  - all cpuid - leafs, including apic_id
+  - this will bind the calling thread to each system cpu one after each other
+  - taking some time to finish … so it's best to call it once and make the object globally available
 
 Then you may use the class' members directly (it's mostly open, besides, you could edit it), or ask a question:
 

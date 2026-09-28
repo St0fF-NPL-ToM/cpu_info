@@ -107,8 +107,9 @@ namespace cpu_info
 		if ( requirements.contains( leaf ) ) // need a check
 		{
 			const auto &req = requirements.at( leaf );
-			if ( at( req >> 24 ).at( ( req >> 16 ) & 0xff ).r[ ( req >> 8 ) & 3 ]
-				 & ( 1 << ( req & 0x1f ) ) == 0 )
+			if ( ( at( req >> 24 ).at( ( req >> 16 ) & 0xff ).r[ ( req >> 8 ) & 3 ]
+				   & ( 1 << ( req & 0x1f ) ) )
+				 == 0 )
 				return _invalid;
 		}
 		// ok, so the leaf should be available / valid …

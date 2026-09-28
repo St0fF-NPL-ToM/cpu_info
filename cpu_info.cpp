@@ -43,7 +43,7 @@ namespace cpu_info
 #ifdef _WIN32
 		NumberOfProcessors = GetActiveProcessorCount( ALL_PROCESSOR_GROUPS );
 #elif defined linux
-		NumberOfProcessors = ( unsigned ) get_nprocs();
+		NumberOfProcessors = ( unsigned ) get_nprocs_conf();
 #endif
 		return NumberOfProcessors;
 	}
