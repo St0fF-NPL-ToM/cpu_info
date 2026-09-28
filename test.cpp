@@ -33,9 +33,9 @@ int main( int argc, const char* argv[] )
 	for ( auto i: views::iota( 0ull, brot.cpu_ids.size() ) )
 	{
 		const auto& bi = brot.id( i );
-		cout << format( "{:02d}: {:s} - {:s}({:02x}, fam: {:02x}, mdl:{:02x}, stp:{:02x}, {:s})\n",
+		cout << format( "{:02d}: {:s} - {:s}({:02x}, fam: {:02x}, mdl:{:02x}, stp:{:02x}, {:s}) '{:s}'\n",
 						i, ( string ) bi, cores[ bi.coreType() ], bi.coreModel(), bi.family(),
-						bi.model(), bi.stepping(), types[ bi.type() ] );
+						bi.model(), bi.stepping(), types[ bi.type() ], bi.brand_string() );
 	}
 
 	cout << endl << "optimal affinities: " << endl;

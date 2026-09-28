@@ -86,6 +86,7 @@ namespace cpu_info
 		cpu_processor_type type() const noexcept;
 		cpu_core_type	   coreType() const noexcept;
 		unsigned		   coreModel() const noexcept;
+		string			   brand_string() const noexcept;
 	};
 
 	/*	replacing INTEL's C-structs with some OOP

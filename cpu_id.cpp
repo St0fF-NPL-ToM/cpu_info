@@ -10,16 +10,16 @@
  */
 
 #ifdef _WIN32
-#	define NOMINMAX
-#	include <Windows.h>
+	#define NOMINMAX
+	#include <Windows.h>
 #endif
 
 #include <cpu_id.h>
 
 #ifdef linux
-#	include <sched.h>
-#	include <unistd.h>
-#	include <sys/sysinfo.h>
+	#include <sched.h>
+	#include <unistd.h>
+	#include <sys/sysinfo.h>
 #endif
 
 #include <set>
@@ -227,8 +227,9 @@ namespace cpu_info
 	{
 		auto fid{ uint8_t( at( 1 )[ 0 ].e.ax >> 8 ) & 0b1111 };
 		auto mid{ uint8_t( at( 1 )[ 0 ].e.ax >> 4 ) & 0b1111 };
-		if ( fid != 6 && fid != 15 ) return mid;
-		return mid + ( uint8_t( at( 1 )[ 0 ].e.ax >> ( 16 - 4 ) ) & ~0b1111 );
+		if ( fid == 6 || fid == 15 )
+			mid |= ( uint8_t( at( 1 )[ 0 ].e.ax >> ( 16 - 4 ) ) & ~0b1111 );
+		return mid;
 	}
 
 	cpu_processor_type cpu_id::type() const noexcept
@@ -236,14 +237,67 @@ namespace cpu_info
 
 	cpu_core_type cpu_id::coreType() const noexcept
 	{
-		if ( size() >= 0x1a ) return cpu_core_type( at( 0x1a )[ 0 ].e.ax >> 24 );
+		if ( _maxLeaf >= 0x1a ) return cpu_core_type( at( 0x1a )[ 0 ].e.ax >> 24 );
 		else return cpu_core_type::DUNNO;
 	}
 
 	unsigned cpu_id::coreModel() const noexcept
 	{
-		if ( size() >= 0x1a ) return at( 0x1a )[ 0 ].e.ax & 0xffffff;
+		if ( _maxLeaf >= 0x1a ) return at( 0x1a )[ 0 ].e.ax & 0xffffff;
 		else return 0u;
+	}
+
+	string cpu_id::brand_string() const noexcept
+	{
+		constexpr auto ext_index			= 0x80000000u;
+		constexpr auto brand_string_support = 0x80000004u;
+		if ( const auto sup = call_cpuid( ext_index, 0u ); sup.e.ax >= brand_string_support )
+		{ // use brand string method
+			char  result[ 4 * 4 * 3 + 1 ]{ '\0' };
+			auto *p = reinterpret_cast< unsigned * >( &result );
+			for ( auto s{ ext_index + 2}; s <= brand_string_support; ++s )
+			{
+				const auto x = call_cpuid( s, 0u );
+				for ( auto i: views::iota( 0, 4 ) ) *p++ = x.r[ i ];
+			}
+			return { result };
+		} else if ( auto brand_index = ( at( 1 )[ 0 ].e.bx & 0xff ) )
+		{ // use middle-aged brand index method
+			static const char *brand_strings[]{ "Intel® Celeron®",
+												"Intel® Pentium® III",
+												"Intel® Pentium® III Xeon®",
+												"Intel® Pentium® III",
+												"",
+												"Mobile Intel® Pentium® III-M",
+												"Mobile Intel® Celeron®",
+												"Intel® Pentium® 4",
+												"Intel® Pentium® 4",
+												"Intel® Celeron®",
+												"Intel® Xeon®",
+												"Intel® Xeon® MP",
+												"Mobile Intel® Pentium® 4-M",
+												"Mobile Intel® Celeron®",
+												"",
+												"Mobile Genuine Intel®",
+												"Intel® Celeron® M",
+												"Mobile Intel® Celeron®",
+												"Intel® Celeron®",
+												"Mobile Genuine Intel®",
+												"Intel® Pentium® M" };
+			switch ( model() | ( family() << 8 ) )
+			{
+				case 0x6b1:
+					if ( brand_index == 3 ) brand_index = 1;
+					break;
+				case 0xF13:
+					if ( brand_index == 0xb ) brand_index = 0xc;
+					if ( brand_index == 0xe ) brand_index = 0xb;
+					break;
+			}
+			if ( brand_index == 0x17 ) brand_index = 0x13;
+			return { brand_strings[ brand_index - 1 ] };
+		}
+		return {};
 	}
 
 #pragma endregion
