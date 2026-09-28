@@ -118,7 +118,7 @@ namespace cpu_info
 		{
 			case 0x04: // leaf #04 reports 0 within eax[4:0] on the last leaf.
 				while ( l->second.back().e.ax & 0x1f )
-					l->second.emplace_back( move( call_cpuid( leaf, l->second.size() ) ) );
+					l->second.emplace_back( call_cpuid( leaf, l->second.size() ) );
 				break;
 			case 0x07: // leafs specifying "max_subleaf" within eax of subleaf 0
 			case 0x14:
@@ -129,7 +129,7 @@ namespace cpu_info
 			case 0x24:
 				if ( const auto &n = l->second.front().e.ax; n > 1u )
 					for ( unsigned s: views::iota( 1u, n ) )
-						l->second.emplace_back( move( call_cpuid( leaf, s ) ) );
+						l->second.emplace_back( call_cpuid( leaf, s ) );
 				break;
 			case 0x0a: // This leaf is valid if CPUID.0AH:EAX[7:0] (Version ID) > 0
 				if ( l->second.front().e.ax & 0xff ) break;
@@ -138,10 +138,10 @@ namespace cpu_info
 			case 0x0b: // leaf #0b reports 0 within ebx[15:0] on the last leaf.
 			case 0x1f: // leaf #1f reports 0 within ebx[15:0] on the last leaf.
 				while ( l->second.back().e.bx & 0xffff )
-					l->second.emplace_back( move( call_cpuid( leaf, l->second.size() ) ) );
+					l->second.emplace_back( call_cpuid( leaf, l->second.size() ) );
 				break;
 			case 0x0d: // leaf #0d is special … subleafs 0 and 1 are always valid.
-				l->second.emplace_back( move( call_cpuid( leaf, 1 ) ) );
+				l->second.emplace_back( call_cpuid( leaf, 1 ) );
 				break;
 			case 0x10: // Sub-leaf n (n ≥ 1) is only valid when (CPUID.10H.00H:EBX[n] == 1)
 			case 0x23: // The sub-leaves of this leaf are enumerated by a bitmask specified in
@@ -155,7 +155,7 @@ namespace cpu_info
 														  : l->second.front().e.bx )
 										 >> subleaf;
 					if ( shifted & 1 ) // valid subleaf?
-						l->second.emplace_back( move( call_cpuid( leaf, subleaf ) ) );
+						l->second.emplace_back( call_cpuid( leaf, subleaf ) );
 					else if ( shifted ) // invalid, but valid leafs left?
 						l->second.emplace_back();
 					if ( ( shifted >> 1 ) == 0 ) break; // no more valid leafs
@@ -163,14 +163,14 @@ namespace cpu_info
 				break;
 			case 0x12: // subleafs 0 and 1 are always valid,
 					   // Sub-leaf n (n ≥ 2) is only valid when CPUID.12H.n:EAX[3:0] != 0
-				l->second.emplace_back( move( call_cpuid( leaf, 1 ) ) );
-				do l->second.emplace_back( move( call_cpuid( leaf, l->second.size() ) ) );
+				l->second.emplace_back( call_cpuid( leaf, 1 ) );
+				do l->second.emplace_back( call_cpuid( leaf, l->second.size() ) );
 				while ( l->second.back().e.ax & 0xf );
 				l->second.pop_back();
 				break;
 			case 0x1b: // leaf #1b: Sub-leaf n is only valid when CPUID.1BH.n:EAX[11:0] != 0
 				while ( l->second.back().e.ax & 0xFFF )
-					l->second.emplace_back( move( call_cpuid( leaf, l->second.size() ) ) );
+					l->second.emplace_back( call_cpuid( leaf, l->second.size() ) );
 				l->second.pop_back();
 				break;
 		}
