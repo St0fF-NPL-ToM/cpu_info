@@ -1,6 +1,6 @@
 #pragma once
 /**
- * 	cpu_topo:	trying to get Intel's official code from
+ * 	cpu_info:	trying to get Intel's official code from
  *
  * 				https://github.com/intel/SDM-Processor-Topology-Enumeration
  *
@@ -8,7 +8,7 @@
  *
  * 	Usage:
  * ========
- * 	namespace functions:
+ * 	namespace 'cpu_info' functions:
  * 		cpuid_result	call_cpuid( Leaf, Sub ) 		→ execute the respective CPUID
  *		void 			bind_thread_to_cpu( cpuNumber ) → what it's called …
  *		unsigned 		get_logical_cpu_count() 		→ again, the naming speaks …
@@ -29,28 +29,20 @@
  *				→ query caps extended to all feature-bits found in the intel docs,
  *
  * 	Step #3✗:	also query "memory"-items, so scoring by shared / non-shared ids becomes possible.
- * */
-
+ *
+ *	Step #4:	Implement platform-independent 'cpu_set'.  It's mostly called the same on both
+ *				platforms of current interest, but implemented differently.
+ */
 #include <cpu_id.h>
+#include <cpu_set.h>
 
 namespace cpu_info
 {
-	/* static interface functions:
-	 */
-	extern cpuid_result call_cpuid( unsigned Leaf, unsigned Subleaf ) noexcept;
-	extern unsigned		get_logical_cpu_count() noexcept;
-
-	/*
-	 *	bind to cpu(s), return previous affinity list
-	 *	→ on failure, an empty "previous" list is returned! So check the result!
-	 */
-	extern id_list		setThreadAffinity( const id_list &target_ids );
-	inline id_list		bind_thread_to_cpu( unsigned ProcessorNumber )
-	{ return setThreadAffinity( { ProcessorNumber } ); }
-
 	/*	cpu topology class:
 	 *	- runs 'the topology acquisition' code in the CTor,
 	 *	  thus a returned object can be queried right away.
+	 *	- also keeps the process affinity mask "around", so further created
+	 *	  thread affinities can be masked by the process mask.
 	 */
 	class cpu_topo
 	{
@@ -61,6 +53,8 @@ namespace cpu_info
 		unsigned sourceLeaf{ 1 };
 
 	  public:
+		// system-assigned process affinity mask
+		const cpu_set							 process_affinity;
 		// list of actual cpu_id mappings, including pre-masked IDs
 		vector< cpu_id >						 cpu_ids;
 		// current system's topology level masks and their names, strongly ordered ascending

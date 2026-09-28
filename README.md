@@ -30,11 +30,19 @@ This mini-lib is evolving, as I am working on Windows and Linux, it just takes t
 - external interface functions,
 - and implements the cpu_topo class
 
+***cpu_enums:*** … what that name says …
+
+- declares X-macros: `CPU_FEATURES`, `CPU_DOMAINS`, `PROCESSOR_TYPE`, `CORE_TYPE`
+- and respective bitfields / enumerations:
+  - `cpu_feature` + accessor functions
+  - `cpu_domain`, `cpu_processor_type`, `cpu_core_type`
+
 ***cpu_id:***
 
 - declares the `cpuid_result` and implements the `cpuid`-call (Windows/Linux)
 - declares and implements `cpuid_leafs` as "all info of a single logical core we may get"
 - assembles this into a `cpu_id` class with specific query functions taylored to cpuid leafs
+  - using `cpu_enums`, features, type, model, etc. can be queried
 - declares some helper structures
 
 ### Future

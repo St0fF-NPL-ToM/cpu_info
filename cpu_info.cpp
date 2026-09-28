@@ -18,126 +18,34 @@
  *
  */
 #ifdef _WIN32
-#	define NOMINMAX
-#	include <Windows.h>
+	#define NOMINMAX
+	#include <Windows.h>
 #endif
 
 #include "cpu_info.h"
 #include <ranges>
-#include <algorithm>
 
 #ifdef linux
-#	include <sched.h>
-#	include <unistd.h>
-#	include <sys/sysinfo.h>
-#	include <math.h>
+	#include <sys/sysinfo.h>
 #endif
 
 namespace cpu_info
 {
-#pragma region external interface functions
-
-	unsigned get_logical_cpu_count( void ) noexcept
-	{
-		unsigned NumberOfProcessors{ 1u };
-#ifdef _WIN32
-		NumberOfProcessors = GetActiveProcessorCount( ALL_PROCESSOR_GROUPS );
-#elif defined linux
-		NumberOfProcessors = ( unsigned ) get_nprocs_conf();
-#endif
-		return NumberOfProcessors;
-	}
-
-	id_list setThreadAffinity( const id_list &target_ids )
-	{
-		id_list result;
-#ifdef _WIN32
-		// Assume the active groups are going to be contiguous.
-		GROUP_AFFINITY ga{}, prev{};
-		auto		   ct = GetCurrentThread();
-		auto		   MaxGroups{ GetActiveProcessorGroupCount() }, selGi{ UINT16_MAX };
-		auto		   ProcessorNumber{ 0u };
-		// build an affinity mask for the given set of cpus
-		for ( uint16_t GroupIndex{ 0u }; GroupIndex < MaxGroups; GroupIndex++ )
-		{
-			uint32_t NumberOfGroupProcessors = GetActiveProcessorCount( GroupIndex );
-			for ( auto GroupProcessorNumber{ 0u }; GroupProcessorNumber < NumberOfGroupProcessors;
-				  ++GroupProcessorNumber, ++ProcessorNumber )
-			{
-				if ( find( target_ids.begin(), target_ids.end(), ProcessorNumber )
-					 != target_ids.end() )
-				{
-					if ( selGi == UINT16_MAX ) selGi = ga.Group = GroupIndex;
-					else if ( selGi != GroupIndex )
-						break; // next group started - cannot use further ids
-					ga.Mask |= ( KAFFINITY ) ( ( ULONG64 ) 1 << ( ULONG64 ) GroupProcessorNumber );
-				}
-			}
-		}
-		// set affinity, retrieving previous mask
-		if ( SetThreadGroupAffinity( ct, &ga, &prev ) )
-		{
-			// calculate cpu numbers used in previous affinity mask
-			ProcessorNumber = 0u;
-			for ( uint16_t GroupIndex{ 0u }; GroupIndex < MaxGroups; GroupIndex++ )
-				if ( auto NumberOfGroupProcessors = GetActiveProcessorCount( GroupIndex );
-					 prev.Group != GroupIndex )
-					ProcessorNumber += NumberOfGroupProcessors;
-				else
-					for ( int i{ 0 }; i < sizeof( prev.Mask ) * 8; ++i )
-						if ( prev.Mask & ( 1 << i ) ) result.push_back( ProcessorNumber + i );
-		}
-
-#elif defined linux
-		// Get the size of the maximum number of configured processors.
-		auto NumberOfProcessors{ get_nprocs_conf() };
-		if ( auto *cpu_set = CPU_ALLOC( NumberOfProcessors ) )
-		{
-			const auto pid	   = getpid();
-			const auto SetSize = CPU_ALLOC_SIZE( NumberOfProcessors );
-			CPU_ZERO_S( SetSize, cpu_set );
-			sched_getaffinity( pid, SetSize, cpu_set );
-			for ( auto i: views::iota( 0, NumberOfProcessors ) )
-				if ( CPU_ISSET_S( i, SetSize, cpu_set ) ) result.push_back( i );
-			CPU_ZERO_S( SetSize, cpu_set );
-			for ( auto &i: target_ids )
-				if ( i < NumberOfProcessors ) CPU_SET_S( i, SetSize, cpu_set );
-			// non-zero result is failure …
-			if ( sched_setaffinity( pid, SetSize, cpu_set ) ) result.clear();
-			CPU_FREE( cpu_set );
-		}
-#endif
-		return result;
-	}
-
-#pragma endregion
-#pragma region topology class
-
 	cpu_topo::cpu_topo()
 	{
-		// step #1: remember current thread affinity. (and bind to first CPU)
-		auto AppAffinity = bind_thread_to_cpu( 0 );
-		if ( AppAffinity.empty() )
+		build_idlist();
+		// reset CPU affinity to before
+		if ( !process_affinity.applyToCurrentThread() )
 			throw "cannot switch cpu affinity, no fallback available.";
-		else
-		{
-			// step #2: collect all cpuid-leafs on all logical cpus
-			build_idlist();
-			// reset CPU affinity to before
-			setThreadAffinity( AppAffinity );
-			// step #3: parse topology
-			parse_topology();
-		}
+		parse_topology();
 	}
 
 	void cpu_topo::build_idlist()
 	{
-		const auto cnt = get_logical_cpu_count();
+		const auto cnt = cpu_set::get_logical_cpu_count();
 		for ( auto n: views::iota( 0u, cnt ) )
-		{
-			bind_thread_to_cpu( n );
-			cpu_ids.emplace_back();
-		}
+			if ( cpu_set( n ).applyToCurrentThread() ) cpu_ids.emplace_back();
+			else throw "cannot switch cpu affinity, no fallback available.";
 	}
 
 	void cpu_topo::parse_topology()
@@ -164,8 +72,7 @@ namespace cpu_info
 					shf0 = shf1 = create_topology_shift( MaximumAddressibleIdsPhysicalPackage );
 				} else
 				{ /* MaximumAddressibleIdsCores: CPUID.4.0.EAX[31:26] */
-					const auto MaximumAddressibleIdsCores =
-						( cpu0[ 4 ][ 0 ].e.ax >> 26 ) + 1;
+					const auto MaximumAddressibleIdsCores = ( cpu0[ 4 ][ 0 ].e.ax >> 26 ) + 1;
 					// Determine the number of LogicalProcessors per core.
 					const auto LogicalProcessorsPerCore =
 						MaximumAddressibleIdsPhysicalPackage / MaximumAddressibleIdsCores;
@@ -291,6 +198,4 @@ namespace cpu_info
 		{}
 		return ids;
 	}
-
-#pragma endregion
 } // namespace cpu_info
