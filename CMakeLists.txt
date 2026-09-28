@@ -5,8 +5,8 @@ project( cpu_info VERSION 0.0.1 LANGUAGES CXX )
 set( CMAKE_CXX_STANDARD 23 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
-set( SOURCES cpu_info.cpp cpu_id.cpp )
-set( HEADERS cpu_info.h cpu_id.h cpu_enums.h )
+set( SOURCES cpu_info.cpp cpu_id.cpp cpu_set.cpp )
+set( HEADERS cpu_info.h cpu_id.h cpu_enums.h cpu_set.h )
 set( DOCS README.md cpu_info.natvis )
 
 add_library( cpu_info ${HEADERS} ${SOURCES} ${DOCS} )
