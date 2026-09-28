@@ -7,7 +7,7 @@ set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
 set( SOURCES cpu_info.cpp cpu_id.cpp )
 set( HEADERS cpu_info.h cpu_id.h cpu_enums.h )
-set( DOCS ReadMe.md cpu_info.natvis )
+set( DOCS README.md cpu_info.natvis )
 
 add_library( cpu_info ${HEADERS} ${SOURCES} ${DOCS} )
 add_library( cpu_info::cpu_info ALIAS cpu_info )
