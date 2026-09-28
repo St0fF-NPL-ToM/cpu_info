@@ -12,11 +12,7 @@
 #ifdef _WIN32
 	#define NOMINMAX
 	#include <Windows.h>
-#endif
-
-#include <any>
-
-#ifdef linux
+#elifdef linux
 	#include <sched.h>
 	#include <unistd.h>
 	#include <sys/sysinfo.h>
@@ -24,20 +20,21 @@
 
 namespace cpu_info
 {
-	class cpu_set
+	class cpu_set final
 	{
 	  public:
-        // Query system CPU count, but only depending on the currently assigned group
-        // (in case we're running on a very phat system …)
-        static unsigned get_logical_cpu_count() noexcept;
+		// Query system CPU count, but only depending on the currently assigned group
+		// (in case we're running on a very phat system …)
+		static unsigned get_logical_cpu_count() noexcept;
 
 		cpu_set() noexcept;					   // query the current process' cpu_set
 		cpu_set( int logical_cpu ) noexcept;   // create a cpu_set with single affinity
 		cpu_set( const cpu_set& o ) = default; // create a copy
 		cpu_set( cpu_set&& o )		= default; // move from another instance
+		~cpu_set() noexcept;
 
-				 operator bool() const noexcept { return _os_structure.has_value(); }
-		bool	 applyToCurrentThread() const noexcept { return apply();}
+				 operator bool() const noexcept;
+		bool	 applyToCurrentThread() const noexcept { return apply(); }
 
 		// produce a new set from operations
 		cpu_set	 operator+( int cpu_id ) const noexcept;
@@ -52,19 +49,13 @@ namespace cpu_info
 		cpu_set& operator|( const cpu_set& o ) noexcept;
 
 	  protected:
-		std::any _os_structure;
-#if linux
-		struct linux_set
-		{
-			int		   sz;
-			cpu_set_t* set;
-			~linux_set();
-		};
-		using os_type = linux_set;
-#elif _WIN32
-		using os_type = GROUP_AFFINITY;
-#endif
 		bool query() noexcept;
 		bool apply() const noexcept;
+#ifdef linux
+		int		   sz{ 0 };
+		cpu_set_t* set{ nullptr };
+#elifdef _WIN32
+		GROUP_AFFINITY ga{ .Group = ALL_PROCESSOR_GROUPS };
+#endif
 	};
 } // namespace cpu_info
