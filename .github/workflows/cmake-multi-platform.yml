@@ -3,6 +3,7 @@
 name: CMake on multiple platforms
 
 on:
+  create:
   pull_request:
     branches: [ "main" ]
 
