@@ -6,6 +6,11 @@
  * 				ported to a simple cpp class … does not work.
  *
  *  This is the header of the cpu_set subclass, implementing task affinity.
+ * 
+ *	ATTN:	This implementation does not try to reinvent cpu_sets, as known
+ *			from different OSes.  It is a simple try on capsuling OS issues
+ *			from application code, giving a platform independent option of
+ *			saying: "please let my thread run on these CPUs, only."
  */
 #include <cpu_set.h>
 
@@ -63,8 +68,8 @@ namespace cpu_info
 
 #elifdef _WIN32
 
-	#include <algorithm>
 	#include <vector>
+	#include <algorithm>
 
 namespace cpu_info
 {
@@ -85,7 +90,7 @@ namespace cpu_info
 	{
 		ga.Mask = // create single cpu mask
 			( KAFFINITY ) ( 1 << std::min( ( DWORD ) logical_cpu,
-										   GetActiveProcessorCount( ga.Group )-1 ) );
+										   GetActiveProcessorCount( ga.Group ) - 1 ) );
 	}
 
 	cpu_set::~cpu_set() noexcept
@@ -96,8 +101,12 @@ namespace cpu_info
 
 	bool cpu_set::query() noexcept
 	{
-		// retrieve cpu-group, because as an end-user-application there is no need to use more than
-		// one cpu-group. We receive a vector, but only the first entry is important.
+		/*	Multiple ways lead to Rome … we need: a cpu-group id AND an affinity mask
+		 *	→ easiest solution:
+		 *		- GetCurrentProcessorNumberEx:	currently active cpu-group id
+		 *		- GetProcessAffinityMask:		process affinity and system affinity
+		 *		(logically, these affinities cover the previously acquired group id)
+		 */
 		HANDLE			 prc{ GetCurrentProcess() };
 		PROCESSOR_NUMBER pn{};
 		GetCurrentProcessorNumberEx( &pn );

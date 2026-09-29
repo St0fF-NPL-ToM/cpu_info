@@ -7,6 +7,11 @@
  * 				ported to a simple cpp class … does not work.
  *
  *  This is the header of the cpu_set subclass, implementing task affinity.
+ * 
+ *	ATTN:	This implementation does not try to reinvent cpu_sets, as known
+ *			from different OSes.  It is a simple try on capsuling OS issues
+ *			from application code, giving a platform independent option of
+ *			saying: "please let my thread run on these CPUs, only."
  */
 
 #ifdef _WIN32
