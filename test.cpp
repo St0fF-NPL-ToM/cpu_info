@@ -38,17 +38,9 @@ int main( int argc, const char* argv[] )
 		const auto&	   bi = brot.id( i );
 		const unsigned mv =
 			( bi.family() << 16 ) | ( bi.model() << 8 ) | ( bi.type() << 4 ) | bi.stepping();
-		cout << format( "{:02d}: {:s} ({:06x}.{:06x}, '{:s}', {:s})\n", i, ( string ) bi, mv,
-						bi.coreModel(), bi.brand_string(), cores[ bi.coreType() ] );
-	}
-
-	cout << endl << "optimal affinities: " << endl;
-	for ( int n( 2 ); n <= physical; n += n )
-	{
-		cout << "count: " << format( "{:02d}", n ) << " mask:";
-		auto ids = brot.optimalProcessAffinity( n, true );
-		for ( auto id: ids ) cout << ( string ) brot.id( id ) << ", ";
-		cout << endl;
+		cout << format( "{:02d}: {:s} ({:06x}.{:06x}, '{:s}', {:s} ({:s}) )\n", i, ( string ) bi,
+						mv, bi.coreModel(), bi.brand_string(), cores[ bi.coreType() ],
+						effs[ bi.efficiency() ] );
 	}
 	return 0;
 }
