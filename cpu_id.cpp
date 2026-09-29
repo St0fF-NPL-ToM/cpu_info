@@ -261,7 +261,7 @@ namespace cpu_info
 				for ( auto i: views::iota( 0, 4 ) ) *p++ = x.r[ i ];
 			}
 			return { result };
-		} else if ( auto brand_index = ( at( 1 )[ 0 ].e.bx & 0xff ) )
+		} else if ( auto brand_index = std::min( 0x17u, at( 1 )[ 0 ].e.bx & 0xff ) )
 		{ // use middle-aged brand index method
 			static const char *brand_strings[]{ "Intel® Celeron®",
 												"Intel® Pentium® III",
@@ -275,6 +275,7 @@ namespace cpu_info
 												"Intel® Celeron®",
 												"Intel® Xeon®",
 												"Intel® Xeon® MP",
+												"",
 												"Mobile Intel® Pentium® 4-M",
 												"Mobile Intel® Celeron®",
 												"",

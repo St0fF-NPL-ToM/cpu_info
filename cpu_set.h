@@ -7,7 +7,7 @@
  * 				ported to a simple cpp class … does not work.
  *
  *  This is the header of the cpu_set subclass, implementing task affinity.
- * 
+ *
  *	ATTN:	This implementation does not try to reinvent cpu_sets, as known
  *			from different OSes.  It is a simple try on capsuling OS issues
  *			from application code, giving a platform independent option of
@@ -42,16 +42,18 @@ namespace cpu_info
 		bool	 applyToCurrentThread() const noexcept { return apply(); }
 
 		// produce a new set from operations
-		cpu_set	 operator+( int cpu_id ) const noexcept;
-		cpu_set	 operator-( int cpu_id ) const noexcept;
-		cpu_set	 operator&( const cpu_set& o ) const noexcept;
-		cpu_set	 operator|( const cpu_set& o ) const noexcept;
+		cpu_set	 operator+( int cpu_id ) const noexcept { return operator|( { cpu_id } ); }
+		cpu_set	 operator-( int cpu_id ) const noexcept { return operator&( { cpu_id } ); }
+		cpu_set	 operator|( const cpu_set& o ) const noexcept; // unite
+		cpu_set	 operator&( const cpu_set& o ) const noexcept; // intersect
+		cpu_set	 operator^( const cpu_set& o ) const noexcept; // xor - remove shared
 
 		// modify inline
-		cpu_set& operator+( int cpu_id ) noexcept;
-		cpu_set& operator-( int cpu_id ) noexcept;
-		cpu_set& operator&( const cpu_set& o ) noexcept;
-		cpu_set& operator|( const cpu_set& o ) noexcept;
+		cpu_set& operator+=( int cpu_id ) noexcept;
+		cpu_set& operator-=( int cpu_id ) noexcept;
+		cpu_set& operator|=( const cpu_set& o ) noexcept;
+		cpu_set& operator&=( const cpu_set& o ) noexcept;
+		cpu_set& operator^=( const cpu_set& o ) noexcept;
 
 	  protected:
 		bool query() noexcept;
@@ -62,6 +64,10 @@ namespace cpu_info
 #elifdef _WIN32
 		GROUP_AFFINITY ga{ .Group = ALL_PROCESSOR_GROUPS };
 		DWORD_PTR	   sysAffinity;
+		cpu_set( WORD group, KAFFINITY mask, DWORD_PTR sa )
+			: ga( mask, group, {} )
+			, sysAffinity( sa )
+		{}
 #endif
 	};
 } // namespace cpu_info

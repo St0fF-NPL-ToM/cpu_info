@@ -35,7 +35,7 @@ configure_package_config_file(
 write_basic_package_version_file(
 	${CMAKE_CURRENT_BINARY_DIR}/cpu_infoConfigVersion.cmake
 	VERSION "${PROJECT_VERSION}" COMPATIBILITY AnyNewerVersion )
-install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/cpu_info.h DESTINATION include )
+install( FILES ${HEADERS} DESTINATION include )
 install( FILES
 	${CMAKE_CURRENT_BINARY_DIR}/cpu_infoConfig.cmake
 	${CMAKE_CURRENT_BINARY_DIR}/cpu_infoConfigVersion.cmake

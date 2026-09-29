@@ -6,7 +6,7 @@
  * 				ported to a simple cpp class … does not work.
  *
  *  This is the header of the cpu_set subclass, implementing task affinity.
- * 
+ *
  *	ATTN:	This implementation does not try to reinvent cpu_sets, as known
  *			from different OSes.  It is a simple try on capsuling OS issues
  *			from application code, giving a platform independent option of
@@ -64,6 +64,44 @@ namespace cpu_info
 		else if ( sched_setaffinity( getpid(), sz, set ) ) return false;
 		else return true;
 	}
+
+	cpu_set cpu_set::operator&( const cpu_set& o ) const noexcept
+	{
+		cpu_set result;
+		CPU_AND_S( sz, result.set, set, o.set );
+		return result;
+	}
+	cpu_set cpu_set::operator|( const cpu_set& o ) const noexcept
+	{
+		cpu_set result;
+		CPU_OR_S( sz, result.set, set, o.set );
+		return result;
+	}
+	cpu_set& cpu_set::operator+=( int cpu_id ) noexcept
+	{
+		CPU_SET_S( cpu_id, sz, set );
+		return *this;
+	}
+	cpu_set& cpu_set::operator-=( int cpu_id ) noexcept
+	{
+		CPU_CLR_S( cpu_id, sz, set );
+		return *this;
+	}
+	cpu_set& cpu_set::operator|=( const cpu_set& o ) noexcept
+	{
+		CPU_OR_S( sz, set, set, o.set );
+		return *this;
+	}
+	cpu_set& cpu_set::operator&=( const cpu_set& o ) noexcept
+	{
+		CPU_AND_S( sz, set, set, o.set );
+		return *this;
+	}
+	cpu_set& cpu_set::operator^=( const cpu_set& o ) noexcept
+	{
+		CPU_XOR_S( sz, set, set, o.set );
+		return *this;
+	}
 } // namespace cpu_info
 
 #elifdef _WIN32
@@ -118,6 +156,41 @@ namespace cpu_info
 	{
 		if ( ga.Group == ALL_PROCESSOR_GROUPS ) return false;
 		else return SetThreadGroupAffinity( GetCurrentThread(), &ga, nullptr );
+	}
+
+	cpu_set cpu_set::operator|( const cpu_set& o ) const noexcept
+	{ return cpu_set( ga.Group, ( ga.Mask | o.ga.Mask ) & sysAffinity, sysAffinity ); }
+
+	cpu_set cpu_set::operator&( const cpu_set& o ) const noexcept
+	{ return cpu_set( ga.Group, ( ga.Mask & o.ga.Mask ) & sysAffinity, sysAffinity ); }
+
+	cpu_set cpu_set::operator^( const cpu_set& o ) const noexcept
+	{ return cpu_set( ga.Group, ( ga.Mask ^ o.ga.Mask ) & sysAffinity, sysAffinity ); }
+
+	cpu_set& cpu_set::operator+=( int cpu_id ) noexcept
+	{
+		ga.Mask |= ( 1 << cpu_id ) & sysAffinity;
+		return *this;
+	}
+	cpu_set& cpu_set::operator-=( int cpu_id ) noexcept
+	{
+		ga.Mask &= ~( ( 1 << cpu_id ) & sysAffinity );
+		return *this;
+	}
+	cpu_set& cpu_set::operator|=( const cpu_set& o ) noexcept
+	{
+		if ( ga.Group == o.ga.Group ) ga.Mask |= o.ga.Mask & sysAffinity;
+		return *this;
+	}
+	cpu_set& cpu_set::operator&=( const cpu_set& o ) noexcept
+	{
+		if ( ga.Group == o.ga.Group ) ga.Mask &= o.ga.Mask & sysAffinity;
+		return *this;
+	}
+	cpu_set& cpu_set::operator^=( const cpu_set& o ) noexcept
+	{
+		if ( ga.Group == o.ga.Group ) ga.Mask ^= o.ga.Mask & sysAffinity;
+		return *this;
 	}
 } // namespace cpu_info
 #endif
