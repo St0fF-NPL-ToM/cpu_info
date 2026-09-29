@@ -56,6 +56,7 @@ namespace cpu_info
 		cpu_set_t* set{ nullptr };
 #elifdef _WIN32
 		GROUP_AFFINITY ga{ .Group = ALL_PROCESSOR_GROUPS };
+		DWORD_PTR	   sysAffinity;
 #endif
 	};
 } // namespace cpu_info

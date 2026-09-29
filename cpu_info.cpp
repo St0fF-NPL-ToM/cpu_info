@@ -32,12 +32,12 @@
 namespace cpu_info
 {
 	cpu_topo::cpu_topo()
+		: process_affinity()
 	{
 		build_idlist();
-		// reset CPU affinity to before
-		if ( !process_affinity.applyToCurrentThread() )
-			throw "cannot switch cpu affinity, no fallback available.";
 		parse_topology();
+		// reset CPU affinity to before
+		process_affinity.applyToCurrentThread();
 	}
 
 	void cpu_topo::build_idlist()

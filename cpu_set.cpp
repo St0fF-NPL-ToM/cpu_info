@@ -63,6 +63,9 @@ namespace cpu_info
 
 #elifdef _WIN32
 
+	#include <algorithm>
+	#include <vector>
+
 namespace cpu_info
 {
 	/* static */
@@ -78,13 +81,11 @@ namespace cpu_info
 	{ query(); }
 
 	cpu_set::cpu_set( int logical_cpu ) noexcept
-		: ga( {} )
+		: cpu_set()
 	{
-		PROCESSOR_NUMBER pn{};
-		GetCurrentProcessorNumberEx( &pn );
-		ga.Group = pn.Group;
-		ga.Mask	 = // create single cpu mask
-			( KAFFINITY ) ( 1 << std::max( logical_cpu, GetActiveProcessorCount( pn.Group ) ) );
+		ga.Mask = // create single cpu mask
+			( KAFFINITY ) ( 1 << std::min( ( DWORD ) logical_cpu,
+										   GetActiveProcessorCount( ga.Group )-1 ) );
 	}
 
 	cpu_set::~cpu_set() noexcept
@@ -95,10 +96,13 @@ namespace cpu_info
 
 	bool cpu_set::query() noexcept
 	{
-		// retrieve cpu-group, because as an end-user-application there is no need
-		// to use more than one cpu-group.
-		if ( GetProcessGroupAffinity( GetCurrentThread(), &ga ) ) return true;
-		else return false;
+		// retrieve cpu-group, because as an end-user-application there is no need to use more than
+		// one cpu-group. We receive a vector, but only the first entry is important.
+		HANDLE			 prc{ GetCurrentProcess() };
+		PROCESSOR_NUMBER pn{};
+		GetCurrentProcessorNumberEx( &pn );
+		ga.Group = pn.Group;
+		return GetProcessAffinityMask( prc, &ga.Mask, &sysAffinity );
 	}
 
 	bool cpu_set::apply() const noexcept
