@@ -202,7 +202,7 @@ namespace cpu_info
 		return vformat( fmtstr + ":({:s})", make_format_args( ai, list ) );
 	}
 
-	bool cpu_id::operator()( cpu_feature feature ) const
+	bool cpu_id::operator()( cpu_feature feature ) const noexcept
 	{
 		const auto f = ( unsigned ) feature;
 		const auto l = get_leaf( feature );
@@ -255,7 +255,7 @@ namespace cpu_info
 		{ // use brand string method
 			char  result[ 4 * 4 * 3 + 1 ]{ '\0' };
 			auto *p = reinterpret_cast< unsigned * >( &result );
-			for ( auto s{ ext_index + 2}; s <= brand_string_support; ++s )
+			for ( auto s{ ext_index + 2 }; s <= brand_string_support; ++s )
 			{
 				const auto x = call_cpuid( s, 0u );
 				for ( auto i: views::iota( 0, 4 ) ) *p++ = x.r[ i ];
@@ -298,6 +298,14 @@ namespace cpu_info
 			return { brand_strings[ brand_index - 1 ] };
 		}
 		return {};
+	}
+
+	cpu_efficiency cpu_id::efficiency() const noexcept
+	{
+		if ( _maxLeaf >= 0x1a )
+			return ( ( at( 0x1a )[ 0 ].e.ax & 0x70000000u ) > 0x20000000u ? performant
+																		  : effficient );
+		else return unknownEff;
 	}
 
 #pragma endregion

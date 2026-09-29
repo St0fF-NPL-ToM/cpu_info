@@ -79,7 +79,7 @@ namespace cpu_info
 						   operator bool() const noexcept { return !empty(); }
 						   operator apic_id() const noexcept;
 						   operator string() const noexcept;
-		bool			   operator()( cpu_feature feature ) const;
+		bool			   operator()( cpu_feature feature ) const noexcept;
 		uint8_t			   stepping() const noexcept;
 		uint8_t			   family() const noexcept;
 		uint8_t			   model() const noexcept;
@@ -87,6 +87,7 @@ namespace cpu_info
 		cpu_core_type	   coreType() const noexcept;
 		unsigned		   coreModel() const noexcept;
 		string			   brand_string() const noexcept;
+		cpu_efficiency	   efficiency() const noexcept;
 	};
 
 	/*	replacing INTEL's C-structs with some OOP

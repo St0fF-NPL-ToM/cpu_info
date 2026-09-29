@@ -144,5 +144,14 @@ namespace cpu_info
 	#define X( name, n ) name = n,
 	enum cpu_core_type { CORE_TYPE( X ) };
 	#undef X
+	/*
+	 *	Regarding this field … there are performance- and efficiency-cores on some platforms.
+	 *	I could not find out, what they really use (except for ARM littleBIG) and obviously
+	 *	core_type::Atom vs. core_type::Core.
+	 */
+	#define EFFICIENCY_TYPE( X ) X( unknownEff, 0 ) X( effficient, 1 ) X( performant, 2 )
+	#define X( name, n ) name = n,
+	enum cpu_efficiency { EFFICIENCY_TYPE( X ) };
+	#undef X
 	// clang-format on
 } // namespace cpu_info

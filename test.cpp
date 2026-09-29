@@ -30,12 +30,16 @@ int main( int argc, const char* argv[] )
 #define X( n ) #n,
 	vector< string > types{ { PROCESSOR_TYPE( X ) } };
 #undef X
+#define X( n, v ) #n,
+	vector< string > effs{ { EFFICIENCY_TYPE( X ) } };
+#undef X
 	for ( auto i: views::iota( 0ull, brot.cpu_ids.size() ) )
 	{
-		const auto& bi = brot.id( i );
-		cout << format( "{:02d}: {:s} - {:s}({:02x}, fam: {:02x}, mdl:{:02x}, stp:{:02x}, {:s}) '{:s}'\n",
-						i, ( string ) bi, cores[ bi.coreType() ], bi.coreModel(), bi.family(),
-						bi.model(), bi.stepping(), types[ bi.type() ], bi.brand_string() );
+		const auto&	   bi = brot.id( i );
+		const unsigned mv =
+			( bi.family() << 16 ) | ( bi.model() << 8 ) | ( bi.type() << 4 ) | bi.stepping();
+		cout << format( "{:02d}: {:s} ({:06x}.{:06x}, '{:s}', {:s})\n", i, ( string ) bi, mv,
+						bi.coreModel(), bi.brand_string(), cores[ bi.coreType() ] );
 	}
 
 	cout << endl << "optimal affinities: " << endl;
