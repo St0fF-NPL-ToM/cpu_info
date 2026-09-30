@@ -2,43 +2,32 @@ cmake_minimum_required( VERSION 4.2 )
 
 project( cpu_info VERSION 0.0.2 LANGUAGES CXX )
 
+include( GNUInstallDirs )
+include( CMakePackageConfigHelpers )
+
 set( CMAKE_CXX_STANDARD 23 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
-set( SOURCES cpu_info.cpp cpu_id.cpp )
-set( HEADERS cpu_info.h cpu_id.h cpu_enums_intel.h cpu_set.hpp )
-set( DOCS README.md cpu_info.natvis )
+# create the library
+add_subdirectory( source )
 
-add_library( cpu_info ${HEADERS} ${SOURCES} ${DOCS} )
+set( DOCS README.md LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md )
+target_sources( cpu_info PRIVATE ${DOCS} )
+
 add_library( cpu_info::cpu_info ALIAS cpu_info )
 target_include_directories( cpu_info PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/source/>
     $<INSTALL_INTERFACE:include>
 )
-source_group( DOCS FILES ${DOCS} )
-source_group( HDRS FILES ${HEADERS} )
-source_group( SRCS FILES ${SOURCES} )
 
-include( GNUInstallDirs )
-include( CMakePackageConfigHelpers )
+source_group( DOCS FILES ${DOCS} )
+
 install( TARGETS cpu_info EXPORT cpu_infoTargets
 	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 	INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} )
 install( EXPORT cpu_infoTargets FILE cpu_infoTargets.cmake NAMESPACE cpu_info::
-	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cpu_info )
-configure_package_config_file(
-	${CMAKE_CURRENT_SOURCE_DIR}/cpu_info.cmake.in
-	${CMAKE_CURRENT_BINARY_DIR}/cpu_infoConfig.cmake
-	INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cpu_info )
-write_basic_package_version_file(
-	${CMAKE_CURRENT_BINARY_DIR}/cpu_infoConfigVersion.cmake
-	VERSION "${PROJECT_VERSION}" COMPATIBILITY AnyNewerVersion )
-install( FILES ${HEADERS} DESTINATION include )
-install( FILES
-	${CMAKE_CURRENT_BINARY_DIR}/cpu_infoConfig.cmake
-	${CMAKE_CURRENT_BINARY_DIR}/cpu_infoConfigVersion.cmake
 	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cpu_info )
 # Buildtree-Export
 export( EXPORT cpu_infoTargets
@@ -48,6 +37,5 @@ export( EXPORT cpu_infoTargets
 
 option( cpu_info_example "build the example program?" off )
 if ( cpu_info_example )
-	add_executable( cpu_info_example test.cpp )
-	target_link_libraries( cpu_info_example PRIVATE cpu_info::cpu_info )
+    add_subdirectory( example )
 endif()
