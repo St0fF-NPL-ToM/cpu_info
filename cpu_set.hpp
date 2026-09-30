@@ -169,7 +169,7 @@ namespace cpu_info
 		}
 
 	  public:
-		static inline unsigned cpu_set::get_logical_cpu_count() noexcept
+		static inline unsigned get_logical_cpu_count() noexcept
 		{
 			PROCESSOR_NUMBER pn{};
 			GetCurrentProcessorNumberEx( &pn );
