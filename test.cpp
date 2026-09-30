@@ -33,9 +33,9 @@ int main( int argc, const char* argv[] )
 #define X( n, v ) #n,
 	vector< string > effs{ { EFFICIENCY_TYPE( X ) } };
 #undef X
-	for ( auto i: views::iota( 0ull, brot.cpu_ids.size() ) )
+	for ( auto i: views::iota( 0ull, brot.count() ) )
 	{
-		const auto&	   bi = brot.id( i );
+		const auto&	   bi = brot[ i ];
 		const unsigned mv =
 			( bi.family() << 16 ) | ( bi.model() << 8 ) | ( bi.type() << 4 ) | bi.stepping();
 		cout << format( "{:02d}: {:s} ({:06x}.{:06x}, '{:s}', {:s} ({:s}) )\n", i, ( string ) bi,

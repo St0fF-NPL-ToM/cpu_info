@@ -10,11 +10,12 @@
  */
 #pragma once
 
-#include <cpu_enums.h>
 #include <vector>
 #include <map>
 #include <string>
 #include <cstdint>
+
+#include <cpu_enums_intel.h>
 
 namespace cpu_info
 {
@@ -34,50 +35,43 @@ namespace cpu_info
 			unsigned int ax, bx, cx, dx;
 		} e;
 	};
-	extern cpuid_result call_cpuid( unsigned Leaf, unsigned Subleaf ) noexcept;
-
-	/**
-	 *	The CPUID leafs are all queried upon creation!  Thus, the CURRENT LOGICAL CPU
-	 *	is queried.  Please make sure, thread affinity is bound to this logical cpu.
-	 *
-	 *	Why an extra class?
-	 *	→	Maps create a new entry upon using the []-operator - BUT WE MUST NOT do that.
-	 *		So the operator needs an overload to neither throw, nor create an invalid entry.
-	 *		Our overload simply returns an invalid entry.
-	 */
-	class cpuid_leafs : public map< unsigned, vector< cpuid_result > >
-	{
-	  public:
-		using M = map< unsigned, vector< cpuid_result > >;
-		using L = vector< cpuid_result >;
-		cpuid_leafs();
-		L &operator[]( unsigned leaf ) noexcept
-		{
-			if ( contains( leaf ) ) return M::operator[]( leaf );
-			else return _invalid;
-		}
-		unsigned max_leafs() const noexcept { return _maxLeaf; }
-
-	  protected:
-		L			  &retrieve( unsigned leaf ) noexcept;
-		static L	   _invalid;
-		const unsigned _maxLeaf{ 0 }; // initialized upon construction!
-	};
 
 	/**
 	 * 	This class is made to describe one logical CPU in your system
 	 * 	→ its APIC_ID
 	 * 	→ a list of this id masked and shifted as different domain IDs
-	 * 	→ the content of CPUID(1) — showing CPU caps (testable)
+	 *
+	 *	The CPUID leafs are all queried upon creation!  Thus, the CURRENT LOGICAL CPU
+	 *	is queried.  Please make sure, thread affinity is bound to this logical cpu.
+	 *
+	 *	Why derive from map?
+	 *	→	Maps create a new entry upon using the []-operator - BUT WE MUST NOT do that.
+	 *		So the operator needs an overload to neither throw, nor create an invalid entry.
+	 *		Our overload simply returns an invalid entry.
 	 */
-	class cpu_id : public cpuid_leafs
+	class cpu_id : public map< unsigned, vector< cpuid_result > >
 	{
 		friend class cpu_topo;
 		static int fmt_width;	 // static - will be set according to maximum apic_id encountered.
-		id_list	   masked_ids{}; // domain-masked apic_ids
+		id_list	   masked_ids{}; // domain-masked apic_ids (needed???)
+
 	  public:
+		// actually execute cpuid( leaf, subleaf )
+		static cpuid_result cpuid( unsigned Leaf, unsigned Subleaf ) noexcept;
+
+		using M = map< unsigned, vector< cpuid_result > >;
+		using L = vector< cpuid_result >;
+		cpu_id();
+		L &operator[]( unsigned leaf ) noexcept
+		{
+			if ( contains( leaf ) ) return M::operator[]( leaf );
+			else return _invalid;
+		}
+		unsigned		   max_leaf() const noexcept { return _maxLeaf; }
+
 						   operator bool() const noexcept { return !empty(); }
 						   operator apic_id() const noexcept;
+		apic_id			   id( cpu_domain domain = LogicalDomain ) const noexcept;
 						   operator string() const noexcept;
 		bool			   operator()( cpu_feature feature ) const noexcept;
 		uint8_t			   stepping() const noexcept;
@@ -88,6 +82,11 @@ namespace cpu_info
 		unsigned		   coreModel() const noexcept;
 		string			   brand_string() const noexcept;
 		cpu_efficiency	   efficiency() const noexcept;
+
+	  protected:
+		L			  &retrieve( unsigned leaf ) noexcept;
+		static L	   _invalid;
+		const unsigned _maxLeaf{ 0 }; // initialized upon construction!
 	};
 
 	/*	replacing INTEL's C-structs with some OOP

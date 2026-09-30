@@ -9,6 +9,7 @@
  *  instruction operations.
  */
 
+#include <optional>
 #ifdef _WIN32
 	#define NOMINMAX
 	#include <Windows.h>
@@ -29,7 +30,7 @@
 namespace cpu_info
 {
 	/* static */
-	cpuid_result call_cpuid( unsigned int Leaf, unsigned int Subleaf ) noexcept
+	cpuid_result cpu_id::cpuid( unsigned int Leaf, unsigned int Subleaf ) noexcept
 	{
 		cpuid_result CpuidRegisters{};
 #if _WIN32
@@ -61,15 +62,18 @@ namespace cpu_info
 		return CpuidRegisters;
 	}
 
-#pragma region cpuid_leafs ... collection of cpuid data
+	/* static */
+	int		cpu_id::fmt_width{ 2 };
+	cpu_id::L cpu_id::_invalid{};
+
+#pragma region leafs ... collection of cpuid data
 	/*
 	 *	cpuid_leafs enumerate all necessary leafs and subleafs on creation,
 	 *	so we do not have to switch process affinity all the time.
 	 */
-	cpuid_leafs::L cpuid_leafs::_invalid{};
-	cpuid_leafs::cpuid_leafs()
+	cpu_id::cpu_id()
 		: M()
-		, _maxLeaf( emplace( 0u, L{ call_cpuid( 0, 0 ) } ).first->second.front().e.ax )
+		, _maxLeaf( emplace( 0u, L{ cpuid( 0, 0 ) } ).first->second.front().e.ax )
 	{
 		// create the CPUID-LEAFS map:
 		for ( unsigned leaf: views::iota( 0u, _maxLeaf ) ) retrieve( leaf + 1 );
@@ -80,7 +84,7 @@ namespace cpu_info
 	 *	to build a list of all cpuid_results available on this logical core, it needs to know
 	 *	which restrictions apply and how to know which sub-pages are available / valid.
 	 */
-	cpuid_leafs::L &cpuid_leafs::retrieve( unsigned leaf ) noexcept
+	cpu_id::L &cpu_id::retrieve( unsigned leaf ) noexcept
 	{ // clang-format off
 		static const set< unsigned >		   reserved{ 0x08, 0x0c, 0x0e, 0x11, 0x13,
 		/* unsupported/reserved leaf ids: */			 0x21, 0x22, 0x25, 0x26 };
@@ -113,12 +117,12 @@ namespace cpu_info
 				return _invalid;
 		}
 		// ok, so the leaf should be available / valid …
-		auto l = emplace( leaf, L{ call_cpuid( leaf, 0 ) } ).first;
+		auto l = emplace( leaf, L{ cpuid( leaf, 0 ) } ).first;
 		switch ( leaf )
 		{
 			case 0x04: // leaf #04 reports 0 within eax[4:0] on the last leaf.
 				while ( l->second.back().e.ax & 0x1f )
-					l->second.emplace_back( call_cpuid( leaf, l->second.size() ) );
+					l->second.emplace_back( cpuid( leaf, l->second.size() ) );
 				break;
 			case 0x07: // leafs specifying "max_subleaf" within eax of subleaf 0
 			case 0x14:
@@ -129,7 +133,7 @@ namespace cpu_info
 			case 0x24:
 				if ( const auto &n = l->second.front().e.ax; n > 1u )
 					for ( unsigned s: views::iota( 1u, n ) )
-						l->second.emplace_back( call_cpuid( leaf, s ) );
+						l->second.emplace_back( cpuid( leaf, s ) );
 				break;
 			case 0x0a: // This leaf is valid if CPUID.0AH:EAX[7:0] (Version ID) > 0
 				if ( l->second.front().e.ax & 0xff ) break;
@@ -138,10 +142,10 @@ namespace cpu_info
 			case 0x0b: // leaf #0b reports 0 within ebx[15:0] on the last leaf.
 			case 0x1f: // leaf #1f reports 0 within ebx[15:0] on the last leaf.
 				while ( l->second.back().e.bx & 0xffff )
-					l->second.emplace_back( call_cpuid( leaf, l->second.size() ) );
+					l->second.emplace_back( cpuid( leaf, l->second.size() ) );
 				break;
 			case 0x0d: // leaf #0d is special … subleafs 0 and 1 are always valid.
-				l->second.emplace_back( call_cpuid( leaf, 1 ) );
+				l->second.emplace_back( cpuid( leaf, 1 ) );
 				break;
 			case 0x10: // Sub-leaf n (n ≥ 1) is only valid when (CPUID.10H.00H:EBX[n] == 1)
 			case 0x23: // The sub-leaves of this leaf are enumerated by a bitmask specified in
@@ -155,7 +159,7 @@ namespace cpu_info
 														  : l->second.front().e.bx )
 										 >> subleaf;
 					if ( shifted & 1 ) // valid subleaf?
-						l->second.emplace_back( call_cpuid( leaf, subleaf ) );
+						l->second.emplace_back( cpuid( leaf, subleaf ) );
 					else if ( shifted ) // invalid, but valid leafs left?
 						l->second.emplace_back();
 					if ( ( shifted >> 1 ) == 0 ) break; // no more valid leafs
@@ -163,14 +167,14 @@ namespace cpu_info
 				break;
 			case 0x12: // subleafs 0 and 1 are always valid,
 					   // Sub-leaf n (n ≥ 2) is only valid when CPUID.12H.n:EAX[3:0] != 0
-				l->second.emplace_back( call_cpuid( leaf, 1 ) );
-				do l->second.emplace_back( call_cpuid( leaf, l->second.size() ) );
+				l->second.emplace_back( cpuid( leaf, 1 ) );
+				do l->second.emplace_back( cpuid( leaf, l->second.size() ) );
 				while ( l->second.back().e.ax & 0xf );
 				l->second.pop_back();
 				break;
 			case 0x1b: // leaf #1b: Sub-leaf n is only valid when CPUID.1BH.n:EAX[11:0] != 0
 				while ( l->second.back().e.ax & 0xFFF )
-					l->second.emplace_back( call_cpuid( leaf, l->second.size() ) );
+					l->second.emplace_back( cpuid( leaf, l->second.size() ) );
 				l->second.pop_back();
 				break;
 		}
@@ -179,15 +183,19 @@ namespace cpu_info
 
 #pragma endregion
 
-#pragma region cpu_id ... one such cpuid_leafs
-	/* static */
-	int		cpu_id::fmt_width{ 2 };
-
+#pragma region info ... using such a cpuid_leafs
 	cpu_id::operator apic_id() const noexcept
 	{
 		if ( _maxLeaf < 0x0b ) return at( 1 )[ 0 ].e.bx >> 24;
 		else if ( _maxLeaf < 0x1f ) return at( 0xb )[ 0 ].e.dx;
 		else return at( 0x1f )[ 0 ].e.dx;
+	}
+
+	apic_id cpu_id::id( cpu_domain domain ) const noexcept
+	{
+		if ( domain != cpu_domain::InvalidDomain && ( unsigned ) domain <= masked_ids.size() )
+			return masked_ids[ ( size_t ) domain - 1 ];
+		else return this->operator apic_id(); // fallback to full id
 	}
 
 	cpu_id::operator string() const noexcept
@@ -251,13 +259,13 @@ namespace cpu_info
 	{
 		constexpr auto ext_index			= 0x80000000u;
 		constexpr auto brand_string_support = 0x80000004u;
-		if ( const auto sup = call_cpuid( ext_index, 0u ); sup.e.ax >= brand_string_support )
+		if ( const auto sup = cpuid( ext_index, 0u ); sup.e.ax >= brand_string_support )
 		{ // use brand string method
 			char  result[ 4 * 4 * 3 + 1 ]{ '\0' };
 			auto *p = reinterpret_cast< unsigned * >( &result );
 			for ( auto s{ ext_index + 2 }; s <= brand_string_support; ++s )
 			{
-				const auto x = call_cpuid( s, 0u );
+				const auto x = cpuid( s, 0u );
 				for ( auto i: views::iota( 0, 4 ) ) *p++ = x.r[ i ];
 			}
 			return { result };

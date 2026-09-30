@@ -17,43 +17,53 @@
  * 	Step #3✗:	also query "memory"-items, so scoring by shared / non-shared ids becomes possible.
  *
  */
+
 #ifdef _WIN32
 	#define NOMINMAX
 	#include <Windows.h>
-#endif
-
-#include "cpu_info.h"
-#include <ranges>
-
-#ifdef linux
+#elifdef linux
 	#include <sys/sysinfo.h>
 #endif
+
+#include <cpu_info.h>
+#include <ranges>
+
 
 namespace cpu_info
 {
 	cpu_topo::cpu_topo()
 		: process_affinity()
 	{
-		build_idlist();
-		parse_topology();
-		// reset CPU affinity to before
-		process_affinity.applyToCurrentThread();
-	}
-
-	void cpu_topo::build_idlist()
-	{
 		const auto cnt = cpu_set::get_logical_cpu_count();
 		for ( auto n: views::iota( 0u, cnt ) )
 			if ( cpu_set( n ).applyToCurrentThread() ) cpu_ids.emplace_back();
 			else throw "cannot switch cpu affinity, no fallback available.";
+
+		parse_topology();
+
+		// reset CPU affinity to before
+		process_affinity.applyToCurrentThread();
 	}
 
 	void cpu_topo::parse_topology()
 	{
-		auto	  &cpu0 = cpu_ids.front();
+		apicid_bit_layouts abl;
+		auto			   create_topology_shift = [ & ]( unsigned int count )
+		{
+			unsigned int Shift{ 31u };
+			unsigned int Index{ ( 1u << Shift ) };
+
+			count = ( count * 2 ) - 1;
+			for ( ; Index; Index >>= 1, Shift-- )
+				if ( count & Index ) break;
+
+			return Shift;
+		};
+
+		auto	  &cpu0		  = cpu_ids.front();
 		// first step: parse available information
-		const auto maxp = cpu0.max_leafs();
-		sourceLeaf		= ( maxp < 0xB ) ? 1u : ( maxp < 0x1f ) ? 0x0b : 0x1f;
+		const auto maxp		  = cpu0.max_leaf();
+		const auto sourceLeaf = ( maxp < 0xB ) ? 1u : ( maxp < 0x1f ) ? 0x0b : 0x1f;
 		if ( sourceLeaf == 1 )
 		{
 			/*  MaximumAddressibleIdsPhysicalPackage:	CPUID.1.EBX[23:16]
@@ -65,7 +75,7 @@ namespace cpu_info
 			{
 				auto MaximumAddressibleIdsPhysicalPackage =
 					( unsigned ) ( ( cpu0[ 1 ][ 0 ].e.bx >> 16 ) & 0xFF );
-				if ( cpu0.max_leafs() < 4 )
+				if ( cpu0.max_leaf() < 4 )
 				{ // This would be a 20+ year old platform to not support CPUID.4
 				  // You cannot report Cores here, a Package == Core and so this only reports SMT
 				  // within a Package.
@@ -132,6 +142,10 @@ namespace cpu_info
 					nxt_index,
 					( ~ca[ nxt_index ].relative_masks[ nxt_index ] )
 						& ( ca[ index ].relative_masks[ index ] ) );
+
+#define X( name ) #name,
+		static constexpr const char *lvl_base_names[] = { CPU_DOMAINS( X ) };
+#undef X
 		// produce topology masks depending on what we got
 		for ( index = 0u; index <= top_domain; index++ )
 			if ( ca[ index ].shift != 0 )
@@ -162,40 +176,5 @@ namespace cpu_info
 					 >> ca[ top_domain - 1 ].shift ]++;
 			cpu_ids[ cpu ].masked_ids = id;
 		}
-	}
-
-	unsigned int cpu_topo::create_topology_shift( unsigned int count )
-	{
-		unsigned int Shift{ 31u };
-		unsigned int Index{ ( 1u << Shift ) };
-
-		count = ( count * 2 ) - 1;
-		for ( ; Index; Index >>= 1, Shift-- )
-			if ( count & Index ) break;
-
-		return Shift;
-	}
-
-	int cpu_topo::countLevel( cpu_domain lvl ) const noexcept
-	{
-		if ( lvl == cpu_domain::InvalidDomain || lvl_ids.size() < ( size_t ) lvl ) return 1;
-		return lvl_ids[ lvl - 1 ].size();
-	}
-
-	const cpu_id &cpu_topo::id( size_t index ) const
-	{
-		if ( index < cpu_ids.size() ) return cpu_ids[ index ];
-		throw "cpu_id index out of bounds";
-	}
-
-	id_list cpu_topo::optimalProcessAffinity( int thread_count, bool prefer_performance )
-	{
-		id_list ids;
-		// prefer_performance means cores, that do not share logical CPUs
-		if ( prefer_performance )
-		{
-		} else
-		{}
-		return ids;
 	}
 } // namespace cpu_info
