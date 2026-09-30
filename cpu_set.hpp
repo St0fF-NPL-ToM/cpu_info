@@ -186,7 +186,6 @@ namespace cpu_info
 				( KAFFINITY ) ( 1 << std::min( ( DWORD ) logical_cpu,
 											   GetActiveProcessorCount( ga.Group ) - 1 ) );
 		}
-		cpu_set() noexcept { ga.Group = ALL_PROCESSOR_GROUPS; }
 
 				operator bool() const noexcept { return ga.Group != ALL_PROCESSOR_GROUPS; }
 
