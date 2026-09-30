@@ -30,11 +30,11 @@
  *
  * 	Step #3✗:	also query "memory"-items, so scoring by shared / non-shared ids becomes possible.
  *
- *	Step #4:	Implement platform-independent 'cpu_set'.  It's mostly called the same on both
- *				platforms of current interest, but implemented differently.
+ *	Step #4✓:	Implement platform-independent 'cpu_set'.  It's mostly called the same on both
+ *			 	 platforms of current interest, but implemented differently.
  */
-#include <cpu_id.h>
-#include <cpu_set.h>
+#include <cpu_id.h>	   // include the code to acquire necessary data
+#include <cpu_set.hpp> // platform-independent thread affinities …
 
 namespace cpu_info
 {
@@ -46,12 +46,6 @@ namespace cpu_info
 	 */
 	class cpu_topo
 	{
-#define X( name ) #name,
-		static constexpr const char *lvl_base_names[] = { CPU_DOMAINS( X ) };
-#undef X
-		// current system's CPUID capabilities (1|B|1F)
-		unsigned sourceLeaf{ 1 };
-
 	  public:
 		// system-assigned process affinity mask
 		const cpu_set							 process_affinity;
@@ -62,25 +56,22 @@ namespace cpu_info
 		// a vector of maps to count masked apic_ids - describes how many
 		// logical cores share the respective masked apic id
 		vector< map< unsigned, int > >			 lvl_ids;
-		apicid_bit_layouts						 abl;
 
 		cpu_topo(); // throws in case CPUID instruction is not available
 					// or thread affinity cannot be set.
 
+		size_t count() const noexcept { return cpu_ids.size(); }
 		// count items of a specific domain (like logical cpu count, core count, tile, package)
-		int			  countLevel( cpu_domain lvl ) const noexcept;
-
-		// throws in case of invalid index
-		const cpu_id &id( size_t index ) const;
-
-		id_list		  optimalProcessAffinity( int thread_count, bool prefer_performance = true );
+		size_t countLevel( cpu_domain lvl ) const noexcept
+		{
+			if ( lvl == cpu_domain::InvalidDomain || lvl_ids.size() < ( size_t ) lvl ) return 1;
+			return lvl_ids[ lvl - 1 ].size();
+		}
+		// throwing accessor, throws in case of invalid index
+		const cpu_id &operator[]( size_t index ) const { return cpu_ids[ index ]; }
 
 	  protected:
-		void		 build_idlist();
-		void		 parse_topology();
-
-		unsigned int create_topology_shift( unsigned int count );
-
-		void		 finish_topology();
+		void build_idlist();
+		void parse_topology();
 	};
 } // namespace cpu_info

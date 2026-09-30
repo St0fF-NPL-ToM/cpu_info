@@ -31,36 +31,35 @@ namespace cpu_info
 	 */
 	// clang-format off
 	#define CPU_FEATURES( X ) \
-		X( SSE3, 2, 0, 1, 0 )		X( PCLMULQDQ, 2, 1, 1, 0 )	X( DTES64, 2, 2, 1, 0 )\
-		X( MONITOR, 2, 3, 1, 0 )	X( DS_CPL, 2, 4, 1, 0 )		X( VMX, 2, 5, 1, 0 )\
-		X( SMX, 2, 6, 1, 0 )		X( EIST, 2, 7, 1, 0 )		X( TM2, 2, 8, 1, 0 )\
-		X( FMA, 2, 12, 1, 0 )		X( SSSE3, 2, 9, 1, 0 )		X( L1_CONTEXT_ID, 2, 10, 1, 0 )\
-		X( DEBUG_INTERFACE, 2, 11, 1, 0 )	X( XTPR_UPDATE_CONTROL, 2, 14, 1, 0 )\
-		X( CMPXCHG16B, 2, 13, 1, 0 )		X( PERF_CAPABILITIES, 2, 15, 1, 0 )\
-		X( PCID, 2, 17, 1, 0 )		X( DCA, 2, 18, 1, 0 )		X( SSE4_1, 2, 19, 1, 0 )\
-		X( SSE4_2, 2, 20, 1, 0 )	X( X2APIC, 2, 21, 1, 0 )	X( MOVBE, 2, 22, 1, 0 )\
-		X( AESNI, 2, 25, 1, 0 )		X( POPCNT, 2, 23, 1, 0 )	X( TSC_DEADLINE, 2, 24, 1, 0 )\
-		X( XSAVE, 2, 26, 1, 0 )		X( OSXSAVE, 2, 27, 1, 0 )	X( AVX, 2, 28, 1, 0 )\
-		X( F16C, 2, 29, 1, 0 )		X( RDRAND, 2, 30, 1, 0 )	X( FPU, 3, 0, 1, 0 )\
-		X( VME, 3, 1, 1, 0 )		X( DE, 3, 2, 1, 0 )			X( PSE, 3, 3, 1, 0 )\
-		X( TSC, 3, 4, 1, 0 )		X( MSR, 3, 5, 1, 0 )		X( PAE, 3, 6, 1, 0 )\
-		X( MCE, 3, 7, 1, 0 )		X( CMPXCHG8B, 3, 8, 1, 0 )	X( APIC, 3, 9, 1, 0 )\
-		X( SEP, 3, 11, 1, 0 )		X( MTRR, 3, 12, 1, 0 )		X( PGE, 3, 13, 1, 0 )\
-		X( MCA, 3, 14, 1, 0 )		X( CMOV, 3, 15, 1, 0 )		X( PAT, 3, 16, 1, 0 )\
-		X( PSE_36, 3, 17, 1, 0 )	X( PSN, 3, 18, 1, 0 )		X( CLFLUSH, 3, 19, 1, 0 )\
-		X( DS, 3, 21, 1, 0 )		X( ACPI, 3, 22, 1, 0 )		X( MMX, 3, 23, 1, 0 )\
-		X( FXSR, 3, 24, 1, 0 )		X( SSE, 3, 25, 1, 0 )		X( SSE2, 3, 26, 1, 0 )\
-		X( SELF_SNOOP, 3, 27, 1, 0 ) X( HTT, 3, 28, 1, 0 )		X( TM, 3, 29, 1, 0 )\
-		X( PBE, 3, 31, 1, 0 ) \
+		X( SSE3, 2, 0, 1, 0 )				X( PCLMULQDQ, 2, 1, 1, 0 )	X( DTES64, 2, 2, 1, 0 )\
+		X( MONITOR, 2, 3, 1, 0 )			X( DS_CPL, 2, 4, 1, 0 )		X( VMX, 2, 5, 1, 0 )\
+		X( SMX, 2, 6, 1, 0 )				X( EIST, 2, 7, 1, 0 )		X( TM2, 2, 8, 1, 0 )\
+		X( FMA, 2, 12, 1, 0 )				X( SSSE3, 2, 9, 1, 0 )		X( L1_CONTEXT_ID, 2, 10, 1, 0 )\
+		X( DEBUG_INTERFACE, 2, 11, 1, 0 )	X( PCID, 2, 17, 1, 0 )		X( DCA, 2, 18, 1, 0 )\
+		X( CMPXCHG16B, 2, 13, 1, 0 )		X( X2APIC, 2, 21, 1, 0 )	X( MOVBE, 2, 22, 1, 0 )\
+		X( XTPR_UPDATE_CONTROL, 2, 14, 1, 0 )							X( SSE4_1, 2, 19, 1, 0 )\
+		X( PERF_CAPABILITIES, 2, 15, 1, 0 )	X( SSE4_2, 2, 20, 1, 0 )	X( PBE, 3, 31, 1, 0 )\
+		X( AESNI, 2, 25, 1, 0 )				X( POPCNT, 2, 23, 1, 0 )	X( TSC_DEADLINE, 2, 24, 1, 0 )\
+		X( XSAVE, 2, 26, 1, 0 )				X( OSXSAVE, 2, 27, 1, 0 )	X( AVX, 2, 28, 1, 0 )\
+		X( F16C, 2, 29, 1, 0 )				X( RDRAND, 2, 30, 1, 0 )	X( FPU, 3, 0, 1, 0 )\
+		X( VME, 3, 1, 1, 0 )				X( DE, 3, 2, 1, 0 )			X( PSE, 3, 3, 1, 0 )\
+		X( TSC, 3, 4, 1, 0 )				X( MSR, 3, 5, 1, 0 )		X( PAE, 3, 6, 1, 0 )\
+		X( MCE, 3, 7, 1, 0 )				X( CMPXCHG8B, 3, 8, 1, 0 )	X( APIC, 3, 9, 1, 0 )\
+		X( SEP, 3, 11, 1, 0 )				X( MTRR, 3, 12, 1, 0 )		X( PGE, 3, 13, 1, 0 )\
+		X( MCA, 3, 14, 1, 0 )				X( CMOV, 3, 15, 1, 0 )		X( PAT, 3, 16, 1, 0 )\
+		X( PSE_36, 3, 17, 1, 0 )			X( PSN, 3, 18, 1, 0 )		X( CLFLUSH, 3, 19, 1, 0 )\
+		X( DS, 3, 21, 1, 0 )				X( ACPI, 3, 22, 1, 0 )		X( MMX, 3, 23, 1, 0 )\
+		X( FXSR, 3, 24, 1, 0 )				X( SSE, 3, 25, 1, 0 )		X( SSE2, 3, 26, 1, 0 )\
+		X( SELF_SNOOP, 3, 27, 1, 0 ) 		X( HTT, 3, 28, 1, 0 )		X( TM, 3, 29, 1, 0 )\
 		/* Leaf 06H ThermalField Name */\
-		X( DIGITAL_TEMP_SENSOR, 0, 0, 6, 0 )			X( TURBO_BOOST, 0, 1, 6, 0 )				\
-		X( ALWAYS_RUNNING_APIC_TIMER, 0, 2, 6, 0 )		X( POWER_LIMIT_NOTIFY, 0, 4, 6, 0 )			\
-		X( HWP_ACTIVITY_WINDOW, 0, 9, 6, 0 )			X( PKG_THERM_MGMT, 0, 6, 6, 0 )				\
+		X( DIGITAL_TEMP_SENSOR, 0, 0, 6, 0 )			X( TURBO_BOOST, 0, 1, 6, 0 )\
+		X( ALWAYS_RUNNING_APIC_TIMER, 0, 2, 6, 0 )		X( POWER_LIMIT_NOTIFY, 0, 4, 6, 0 )\
+		X( HWP_ACTIVITY_WINDOW, 0, 9, 6, 0 )			X( PKG_THERM_MGMT, 0, 6, 6, 0 )\
 		X( HWP_INTERRUPT, 0, 8, 6, 0 )	X( HWP, 0, 7, 6, 0 )	X( EXT_CLOCK_MOD, 0, 5, 6, 0 )\
 		X( HWP_REQUEST_PKG, 0, 11, 6, 0 )	X( HWP_EPP, 0, 10, 6, 0 )	X( HDC, 0, 13, 6, 0 )\
 		X( TURBO_BOOST_MAX, 0, 14, 6, 0 )				X( HWP_CAP, 0, 15, 6, 0 ) \
-		X( HWP_PECI_OVERRIDE, 0, 16, 6, 0 )				X( FLEXIBLE_HWP, 0, 17, 6, 0 ) \
-		X( HWP_REQUEST_FAST_ACCESS, 0, 18, 6, 0 )		X( HW_FEEDBACK, 0, 19, 6, 0 ) \
+		X( HWP_PECI_OVERRIDE, 0, 16, 6, 0 )				X( FLEXIBLE_HWP, 0, 17, 6, 0 )\
+		X( HWP_REQUEST_FAST_ACCESS, 0, 18, 6, 0 )		X( HW_FEEDBACK, 0, 19, 6, 0 )\
 		X( HWP_REQUEST_IGNORE_IDLE, 0, 20, 6, 0 )		X( HWP_CTL, 0, 22, 6, 0 )\
 		X( THREAD_DIRECTOR, 0, 23, 6, 0 )				X( HW_FEEDBACK_CAP, 2, 0, 6, 0 )\
 		X( ENERGY_PERF_BIAS, 2, 3, 6, 0 )\
@@ -122,13 +121,12 @@ namespace cpu_info
 	inline unsigned get_register( cpu_feature feat )	{ return ( ( ( unsigned ) feat ) >> 5 ) & 0x3; }
 	inline unsigned get_bit( cpu_feature feat )			{ return ( ( unsigned ) feat ) & 0x1f; }
 	/*
-	 * The enumeration of domain identifiers and these need to each match
-	 * the value as specified by CPUID.1F and CPUID.B documentation.
+	 * The enumeration of domain identifiers as specified by CPUID.1F and CPUID.B documentation.
 	 *
 	 * Using an X-macro driven approach, here …	again
 	 */
 	#define CPU_DOMAINS( X )	X( InvalidDomain )	X( LogicalDomain )	X( CoreDomain ) \
-			X( ModuleDomain )	X( TileDomain )		X( DieDomain )		X( DieGrpDomain )	
+			X( ModuleDomain )	X( TileDomain )		X( DieDomain )		X( DieGrpDomain )
 	#define X( name ) name,
 	enum cpu_domain { CPU_DOMAINS( X ) };
 	/*
