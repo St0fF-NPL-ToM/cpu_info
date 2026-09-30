@@ -30,7 +30,7 @@ This mini-lib is evolving, as I am working on Windows and Linux, it just takes t
 - external interface functions,
 - and implements the cpu_topo class
 
-***cpu_enums:*** … what that name says …
+***cpu_enums_intel:*** … what that name says …
 
 - declares X-macros: `CPU_FEATURES`, `CPU_DOMAINS`, `PROCESSOR_TYPE`, `CORE_TYPE`, `EFFICIENCY_TYPE`
 - and respective bitfields / enumerations:
@@ -39,9 +39,10 @@ This mini-lib is evolving, as I am working on Windows and Linux, it just takes t
 
 ***cpu_id:***
 
-- declares the `cpuid_result` and implements the `cpuid`-call (Windows/Linux)
-- declares and implements `cpuid_leafs` as "all info of a single logical core we may get"
-- assembles this into a `cpu_id` class with specific query functions taylored to cpuid leafs
+- declares the `cpu_id` class:
+  - public static member `cpuid( leaf, subleaf )` implements the `cpuid`-call (Windows/Linux)
+- is a map of "all info of a single logical core we may get"
+- contains specific query functions taylored to cpuid leafs
   - using `cpu_enums`, features, type, model, etc. can be queried
 - declares some helper structures
 
@@ -60,15 +61,7 @@ This mini-lib is evolving, as I am working on Windows and Linux, it just takes t
 
 ### Future
 
-Plans are, that this is not the end. As can be seen from the public (nyi) interface:
-
-```cpp
-		id_list		  optimalProcessAffinity( int thread_count, bool prefer_performance = true );
-```
-
-A `std::vector<unsigned>` being passed back and forth may not be the best solution. But the "set cpu affinity"-functions were already existing.
-
-Now, with `cpu_set` and the efficiency features, even more is possible...
+Now, with `cpu_set` and the efficiency features, thinkable stuff is using the `cpu_topo` as the management basis of a more complex application thread pool …
 
 ---
 
@@ -80,14 +73,14 @@ There are probably many options how to use the code at hand. Most obvious are:
 - import cpu_info's source files into your source tree (currently):
   - cpu_info.h / cpp
   - cpu_id.h / cpp
-  - cpu_enums.h
-  - cpu_set.h / cpp
+  - cpu_enums_intel.h
+  - cpu_set.hpp
 
 > NOTE: c++20 is required for compilation due to the use of `std::format` and `std::vformat`
 
 > NOTE: file amount / source structure may change without notice
 
-Inside your code, instantiate a `cpu_info` object.  It will run a complete query of your CPU infrastructure upon construction:
+Inside your code, instantiate a `cpu_topo` object.  It will run a complete query of your CPU infrastructure upon construction:
 
 - query current thread's cpu capabilities to determine operation mode
 - cycle all CPUs to query their respective caps
