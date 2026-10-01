@@ -70,6 +70,8 @@ namespace cpu_info
 		// throwing accessor, throws in case of invalid index
 		const cpu_id &operator[]( size_t index ) const { return cpu_ids[ index ]; }
 
+		bool knowsEfficiency() const noexcept { return cpu_ids[0]._maxLeaf >= 0x1a; /* core type available */ }
+
 	  protected:
 		void build_idlist();
 		void parse_topology();
