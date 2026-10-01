@@ -9,7 +9,6 @@
  *  instruction operations.
  */
 
-#include <optional>
 #ifdef _WIN32
 	#define NOMINMAX
 	#include <Windows.h>
@@ -212,7 +211,6 @@ namespace cpu_info
 
 	bool cpu_id::operator()( cpu_feature feature ) const noexcept
 	{
-		const auto f = ( unsigned ) feature;
 		const auto l = get_leaf( feature );
 		const auto s = get_subleaf( feature );
 		const auto r = get_register( feature );

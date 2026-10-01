@@ -5,6 +5,8 @@ set( HEADERS cpu_info.h cpu_id.h cpu_enums_intel.h cpu_set.hpp )
 set( DOCS cpu_info.natvis )
 
 add_library( cpu_info ${HEADERS} ${SOURCES} ${DOCS} )
+# target_compile_options( cpu_info PUBLIC "-Wall" )
+
 source_group( DOCS FILES ${DOCS} )
 source_group( HDRS FILES ${HEADERS} )
 source_group( SRCS FILES ${SOURCES} )
