@@ -100,7 +100,7 @@ namespace cpu_info
 	  public:
 		using BASE = map< unsigned, id_mask >;
 		using BASE::map;
-		const id_mask operator[]( unsigned key ) const
+		id_mask operator[]( unsigned key ) const
 		{
 			if ( contains( key ) ) return at( key );
 			else return 0u;
