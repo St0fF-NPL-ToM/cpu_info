@@ -180,7 +180,7 @@ namespace cpu_info
 			: ga( {} )
 		{
 			query();
-			if ( _init == init_tinit_type::empty ) ga.Mask = KAFFINITY{};
+			if ( _init == init_type::empty ) ga.Mask = KAFFINITY{};
 		}
 		cpu_set( int logical_cpu ) noexcept
 			: cpu_set()
