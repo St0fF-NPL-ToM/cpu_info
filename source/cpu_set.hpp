@@ -31,6 +31,7 @@ namespace cpu_info
 	class cpu_set final
 	{
 	  public:
+		enum class init_type { thread, empty };
 		// Query system CPU count, but only depending on the currently assigned group
 		// (in case we're running on a very phat system …)
 		/*  static unsigned get_logical_cpu_count() noexcept; */
@@ -79,20 +80,19 @@ namespace cpu_info
 		// Now, all above-mentioned functions get declared for linux:
 	  public:
 		static inline unsigned get_logical_cpu_count() noexcept { return get_nprocs(); }
-		cpu_set() noexcept
+
+		cpu_set( init_type _init = init_type::thread ) noexcept
 			: sz( get_nprocs() )
 			, set( CPU_ALLOC( sz ) )
 		{
 			CPU_ZERO_S( sz, set );
-			query();
+			if ( _init == init_type::thread ) query();
 		}
+
 		cpu_set( int logical_cpu ) noexcept
-			: sz( get_nprocs() )
-			, set( CPU_ALLOC( sz ) )
-		{
-			CPU_ZERO_S( sz, set );
-			CPU_SET_S( logical_cpu, sz, set );
-		}
+			: cpu_set( init_type::empty )
+		{ CPU_SET_S( logical_cpu, sz, set ); }
+
 		~cpu_set() noexcept
 		{
 			if ( set )
@@ -103,6 +103,7 @@ namespace cpu_info
 			}
 		}
 		inline	operator bool() const noexcept { return set != nullptr; }
+
 		cpu_set operator&( const cpu_set& o ) const noexcept
 		{
 			cpu_set result;
@@ -175,10 +176,12 @@ namespace cpu_info
 			GetCurrentProcessorNumberEx( &pn );
 			return GetActiveProcessorCount( pn.Group );
 		}
-		cpu_set() noexcept
+		cpu_set( init_type _init = init_type::thread ) noexcept
 			: ga( {} )
-		{ query(); }
-
+		{
+			query();
+			if ( _init == init_tinit_type::empty ) ga.Mask = KAFFINITY{};
+		}
 		cpu_set( int logical_cpu ) noexcept
 			: cpu_set()
 		{
@@ -186,7 +189,6 @@ namespace cpu_info
 				( KAFFINITY ) ( 1 << std::min( ( DWORD ) logical_cpu,
 											   GetActiveProcessorCount( ga.Group ) - 1 ) );
 		}
-
 				operator bool() const noexcept { return ga.Group != ALL_PROCESSOR_GROUPS; }
 
 		cpu_set operator|( const cpu_set& o ) const noexcept
