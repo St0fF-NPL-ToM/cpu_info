@@ -1,4 +1,6 @@
-# cpu_info documentation - enumeration types
+# cpu_info Documentation - enumeration types
+
+[→ back to overview](overview.md)
 
 Most enumerations in this project are declared in the form of an X-macro, first, then transmogrified into the respective enum or enum class (depending on usage pattern).
 
@@ -8,7 +10,7 @@ The intention: to be able to easily provide a string table of any kind for names
 
 | enum class | X-macro | X-params | description |
 | :--- | :---: | :---: | :--- |
-| [`cpu_features`](#cpu_infocpu_features) | CPU_FEATURES | NAME, REG, BIT, LEAF, SUB | contains all Intel®-defined feature bits retrievable via cpuid.|
+| [`cpu_features`](#cpu_infocpu_features) | CPU_FEATURES | NAME, REG, BIT, LEAF, SUB | contains all Intel®-defined feature bits retrievable via cpuid. |
 | [`cpu_domain`](#cpu_infocpu_domain) | CPU_DOMAIN | NAME | for topology and queries, the domain of a cpu core as described by Intel®<br/>(e.g. `LogicalDomain`, `CoreDomain` (physical cores), `DieDomain`, etc.) |
 | [`cpu_core_type`](#cpu_setcpu_core_type) | CORE_TYPE | NAME, MASK_VALUE | A 6 bit mask, where only 2 values are really useful: `Core` and `Atom` (other values should never be encountered, or treated as "reserved, invalid") |
 | [`cpu_efficiency`](#cpu_infocpu_efficiency) | EFFICIENCY_TYPE | NAME, VALUE | Translation of `cpu_core_type` into its actual meaning |
@@ -119,3 +121,7 @@ The X-Macro signature is: `X( NAME, REG, BIT, LEAF, SUB )`. Thus, to create a ma
     static const unordered_map< cpu_info::cpu_features, std::string > map{ CPU_FEATURES( X ) };
 #undef X
 ```
+
+---
+
+[→ back to overview](overview.md)
