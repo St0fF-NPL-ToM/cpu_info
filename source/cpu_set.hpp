@@ -47,8 +47,8 @@ namespace cpu_info
 		bool	applyToCurrentThread() const noexcept { return apply(); }
 
 		// produce a new set from operations
-		cpu_set operator+( int cpu_id ) const noexcept { return operator|( { cpu_id } ); }
-		cpu_set operator-( int cpu_id ) const noexcept { return operator&( { cpu_id } ); }
+		cpu_set operator+( int cpu_Nid ) const noexcept { return operator|( { cpu_Nid } ); }
+		cpu_set operator-( int cpu_Nid ) const noexcept { return operator&( { cpu_Nid } ); }
 		/*  cpu_set	 operator|( const cpu_set& o ) const noexcept; */ // unite
 		/*  cpu_set	 operator&( const cpu_set& o ) const noexcept; */ // intersect
 		/*  cpu_set	 operator^( const cpu_set& o ) const noexcept; */ // xor - remove shared

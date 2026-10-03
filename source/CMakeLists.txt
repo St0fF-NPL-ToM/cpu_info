@@ -1,7 +1,7 @@
 cmake_minimum_required( VERSION 4.2 )
 
 set( SOURCES cpu_info.cpp cpu_id.cpp )
-set( HEADERS cpu_info.h cpu_id.h cpu_enums_intel.h cpu_set.hpp )
+set( HEADERS cpu_info.h cpu_id.h cpu_enums_intel.h cpu_set.hpp cpu_info_types.hpp )
 set( DOCS cpu_info.natvis )
 
 add_library( cpu_info ${HEADERS} ${SOURCES} ${DOCS} )
