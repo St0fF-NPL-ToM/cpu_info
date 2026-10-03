@@ -48,14 +48,14 @@ namespace cpu_info
 	{
 	  public:
 		// system-assigned process affinity mask
-		const cpu_set							 process_affinity;
+		const cpu_set							   process_affinity;
 		// list of actual cpu_id mappings, including pre-masked IDs
-		vector< cpu_id >						 cpu_ids;
+		vector< cpu_id >						   cpu_ids;
 		// current system's topology level masks and their names, strongly ordered ascending
-		map< unsigned, pair< id_mask, string > > level_masks_names;
+		map< cpu_domain, pair< id_mask, string > > level_masks_names;
 		// a vector of maps to count masked apic_ids - describes how many
 		// logical cores share the respective masked apic id
-		vector< map< unsigned, int > >			 lvl_ids;
+		vector< map< apic_id, int > >			   lvl_ids;
 
 		cpu_topo(); // throws in case CPUID instruction is not available
 					// or thread affinity cannot be set.
@@ -70,7 +70,8 @@ namespace cpu_info
 		// throwing accessor, throws in case of invalid index
 		const cpu_id &operator[]( size_t index ) const { return cpu_ids[ index ]; }
 
-		bool knowsEfficiency() const noexcept { return cpu_ids[0]._maxLeaf >= 0x1a; /* core type available */ }
+		bool		  knowsEfficiency() const noexcept
+		{ return cpu_ids[ 0 ]._maxLeaf >= 0x1a; /* core type available */ }
 
 	  protected:
 		void build_idlist();

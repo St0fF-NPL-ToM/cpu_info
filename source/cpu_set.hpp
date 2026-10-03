@@ -11,7 +11,7 @@
  *	ATTN:	This implementation does not try to reinvent cpu_sets, as known
  *			from different OSes.  It is a simple try on capsuling OS issues
  *			from application code, giving a platform independent option of
- *			saying: "please let my thread run on these CPUs, only."
+ *			saying: "please let my process run on these CPUs, only."
  */
 
 #ifdef _WIN32
@@ -31,7 +31,7 @@ namespace cpu_info
 	class cpu_set final
 	{
 	  public:
-		enum class init_type { thread, empty };
+		enum class init_type { process, empty };
 		// Query system CPU count, but only depending on the currently assigned group
 		// (in case we're running on a very phat system …)
 		/*  static unsigned get_logical_cpu_count() noexcept; */
@@ -81,12 +81,12 @@ namespace cpu_info
 	  public:
 		static inline unsigned get_logical_cpu_count() noexcept { return get_nprocs(); }
 
-		cpu_set( init_type _init = init_type::thread ) noexcept
+		cpu_set( init_type _init = init_type::process ) noexcept
 			: sz( get_nprocs() )
 			, set( CPU_ALLOC( sz ) )
 		{
 			CPU_ZERO_S( sz, set );
-			if ( _init == init_type::thread ) query();
+			if ( _init == init_type::process ) query();
 		}
 
 		cpu_set( int logical_cpu ) noexcept
@@ -176,7 +176,7 @@ namespace cpu_info
 			GetCurrentProcessorNumberEx( &pn );
 			return GetActiveProcessorCount( pn.Group );
 		}
-		cpu_set( init_type _init = init_type::thread ) noexcept
+		cpu_set( init_type _init = init_type::process ) noexcept
 			: ga( {} )
 		{
 			query();
