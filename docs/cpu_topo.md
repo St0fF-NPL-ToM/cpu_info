@@ -74,7 +74,7 @@ The class does all its "heavy lifting" inside the `refresh()` function, which (r
 
 After restoring the original affinity, it calls the protected member function `parse_topology`, which is modeled after [Intel®'s excellent C example](https://github.com/intel/SDM-Processor-Topology-Enumeration).
 
-This is the reason we're carrying around structures like `apicid_bit_layout` inside `cpu_id.h` - where it definitively not belongs.
+This is the reason we're carrying around structures like `apicid_bit_layout` inside `cpu_id.h` - where it definitively not belongs.  See issue #7.
 
 ---
 
