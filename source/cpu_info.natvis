@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
-  <Type Name="cpu_info::cpuid_result">
-    <DisplayString>A:{e.ax,X} B:{e.bx,X} C:{e.cx,X} D:{e.dx,X}</DisplayString>
-  </Type>
+	<Type Name="cpu_info::cpuid_result">
+		<DisplayString>A:{e.ax,X} B:{e.bx,X} C:{e.cx,X} D:{e.dx,X}</DisplayString>
+	</Type>
 
-  <Type Name="cpu_info::apicid_bit_layout">
-	<DisplayString>{domain} → {shift,d}, {relative_masks}</DisplayString>
-  </Type>
+	<Type Name="cpu_info::apicid_bit_layout">
+		<DisplayString>{domain} → {shift,d}, {relative_masks}</DisplayString>
+	</Type>
 
 	<Type Name="cpu_info::cpu_topo">
 		<DisplayString>CPUs:{cpu_ids.size()} Domains:{lvl_ids.size()}</DisplayString>
