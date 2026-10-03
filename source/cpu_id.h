@@ -61,7 +61,9 @@ namespace cpu_info
 
 		using M = map< unsigned, vector< cpuid_result > >;
 		using L = vector< cpuid_result >;
+
 		cpu_id();
+
 		L &operator[]( unsigned leaf ) noexcept
 		{
 			if ( contains( leaf ) ) return M::operator[]( leaf );

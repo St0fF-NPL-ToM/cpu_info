@@ -77,7 +77,6 @@ namespace cpu_info
 		// create the CPUID-LEAFS map:
 		for ( unsigned leaf: views::iota( 0u, _maxLeaf ) ) retrieve( leaf + 1 );
 	}
-
 	/*
 	 *	The following function is modeled after INTEL's documentation.  As the CTor calls tries
 	 *	to build a list of all cpuid_results available on this logical core, it needs to know

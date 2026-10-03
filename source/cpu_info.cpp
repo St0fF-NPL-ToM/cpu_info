@@ -34,13 +34,19 @@ namespace cpu_info
 	cpu_topo::cpu_topo()
 		: process_affinity()
 	{
+		if ( !cpu_set( 0 ).applyToCurrentThread() ) // check if switching works
+			throw "cannot switch cpu affinity, no fallback available.";
+		refresh();
+	}
+
+	void cpu_topo::refresh() noexcept
+	{
+		cpu_ids.clear();
 		const auto cnt = cpu_set::get_logical_cpu_count();
 		for ( auto n: views::iota( 0u, cnt ) )
-			if ( cpu_set( n ).applyToCurrentThread() ) cpu_ids.emplace_back();
-			else throw "cannot switch cpu affinity, no fallback available.";
+			cpu_set( n ).applyToCurrentThread(), cpu_ids.emplace_back();
 
 		parse_topology();
-
 		// reset CPU affinity to before
 		process_affinity.applyToCurrentThread();
 	}
@@ -146,6 +152,7 @@ namespace cpu_info
 #define X( name ) #name,
 		static constexpr const char *lvl_base_names[] = { CPU_DOMAINS( X ) };
 #undef X
+		level_masks_names.clear();
 		// produce topology masks depending on what we got
 		for ( index = 0u; index <= top_domain; index++ )
 			if ( ca[ index ].shift != 0 )
@@ -155,7 +162,7 @@ namespace cpu_info
 							   index == top_domain ? "_pkg_"
 												   : lvl_base_names[ ca[ index ].domain ] ) );
 		// at last, build the counter-map and update all cpu_ids
-		lvl_ids.resize( top_domain + 1 );
+		lvl_ids.clear(), lvl_ids.resize( top_domain + 1 );
 		for ( unsigned cpu{}; cpu < cpu_cnt; cpu++ )
 		{
 			id_list id;
