@@ -36,9 +36,10 @@ namespace cpu_info
 		// (in case we're running on a very phat system …)
 		/*  static unsigned get_logical_cpu_count() noexcept; */
 
-		/*  cpu_set() noexcept;					   */ // query the current process' cpu_set
+		// query the current process' cpu_set (default), or create empty set
+		/*  cpu_set( init_type _ = init_type::process ) noexcept; */
 		/*  cpu_set( int logical_cpu ) noexcept;   */ // create a cpu_set with single affinity
-		/*  cpu_set( const cpu_set& o ) = default; */ // create a copy
+		/*  cpu_set( const cpu_set& o ) noexcept;  */ // create a copy
 		/*  cpu_set( cpu_set&& o )		= default; */ // move from another instance
 		/*  ~cpu_set() noexcept; */
 
