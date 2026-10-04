@@ -48,19 +48,18 @@ namespace cpu_info
 	{
 	  public:
 		// system-assigned process affinity mask
-		const cpu_set							   process_affinity;
+		const cpu_set				  process_affinity;
 		// list of actual cpu_id mappings, including pre-masked IDs
-		vector< cpu_id >						   cpu_ids;
-		// current system's topology level masks and their names, strongly ordered ascending
-		map< cpu_domain, pair< id_mask, string > > level_masks_names;
+		vector< cpu_id >			  cpu_ids;
 		// a vector of maps to count masked apic_ids - describes how many
 		// logical cores share the respective masked apic id
-		vector< map< apic_id, int > >			   lvl_ids;
+		vector< map< apic_id, int > > lvl_ids;
 
 		cpu_topo(); // throws in case CPUID instruction is not available
 					// or thread affinity cannot be set.
-		void refresh() noexcept;
+		void   refresh() noexcept;
 
+		// returns the number of logical cpus accessible to the callee (without further OS calls)
 		size_t count() const noexcept { return cpu_ids.size(); }
 		// count items of a specific domain (like logical cpu count, core count, tile, package)
 		size_t countLevel( cpu_domain lvl ) const noexcept
@@ -73,8 +72,13 @@ namespace cpu_info
 
 		bool		  knowsEfficiency() const noexcept
 		{ return cpu_ids[ 0 ]._maxLeaf >= 0x1a; /* core type available */ }
+		// retrieve system domain information
+		int		level_shift( cpu_domain domain ) const noexcept;
+		id_mask level_mask( cpu_domain domain ) const noexcept;
 
-	  protected:
+	  protected: // internal operations
+		unsigned create_topology_shift( unsigned int count ) const noexcept;
+		inline unsigned id_leaf( int index = 0 ) const;
 		void parse_topology();
 	};
 } // namespace cpu_info

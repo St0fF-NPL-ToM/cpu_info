@@ -90,14 +90,12 @@ Examples:
     // core-domain-id of cpu[ph-1] (physical count should be at max cpu count)
     const auto cd_id    = info[ physical-1 ].id( cpu_info::cpu_domain::CoreDomain );
 
-    // retrieve mask name value of a domain:
-    const id_mask mask  = info.level_masks_names[ cpu_info::cpu_domain::CoreDomain ].first;
-    const std::string n = info.level_masks_names[ cpu_info::cpu_domain::CoreDomain ].second;
+    // retrieve mask / shift value of a domain: (this should be shared - i.e. same output across all cores!)
+    const id_mask mask  = info.level_mask( cpu_info::cpu_domain::CoreDomain );
+    const int shift     = info.level_shift( cpu_info::cpu_domain::CoreDomain );
 ```
 
-As seen in that last example, there is no need to use the X-macro of cpu_domain to get visual output data, it's already done inside cpu_topo, at least for all domains currently in use.
-
-> I actually do not remember why, this should be subject to inspection!  During build-up of the topology, that string is not needed at all and with this member, the X-macro-style definition does make little sense on `cpu_domain`.
+If you like, please use the X-macro for creating an output string list and output values as you wish.
 
 ---
 

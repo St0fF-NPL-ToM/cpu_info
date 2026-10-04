@@ -62,6 +62,11 @@ namespace cpu_info
 			if ( contains( leaf ) ) return M::operator[]( leaf );
 			else return _invalid;
 		}
+		const L &operator[]( unsigned leaf ) const noexcept
+		{
+			if ( contains( leaf ) ) return at( leaf );
+			else return _invalid;
+		}
 		unsigned		   max_leaf() const noexcept { return _maxLeaf; }
 
 						   operator bool() const noexcept { return !empty(); }

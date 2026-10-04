@@ -1,11 +1,11 @@
 /**
- * 	cpu_topo:	trying to get Intel's official code from
+ * 	cpu_topo:	trying to get
  *
- * 				https://github.com/intel/SDM-Processor-Topology-Enumeration
+ * 		[Intel's official code](https://github.com/intel/SDM-Processor-Topology-Enumeration)
  *
  * 				ported to a simple cpp class …
  *
- * Step #1✓:		simple cpu enumeration on a system with subclassing by CPU domains
+ * Step #1✓:	simple cpu enumeration on a system with subclassing by CPU domains
  * 				- query count of CPUs of a domain
  * 				- retrieve (un)masked APIC IDs per cpu
  * 	→ 	Solves the question of "how many threads do make sense in certain scenarios"
@@ -27,7 +27,6 @@
 
 #include <cpu_info.h>
 #include <ranges>
-
 
 namespace cpu_info
 {
@@ -51,58 +50,83 @@ namespace cpu_info
 		process_affinity.applyToCurrentThread();
 	}
 
-	void cpu_topo::parse_topology()
+	int cpu_topo::level_shift( cpu_domain d ) const noexcept
 	{
-		apicid_bit_layouts abl;
-		auto			   create_topology_shift = [ & ]( unsigned int count )
+		const auto &cpu0 = cpu_ids.front();
+		const auto	src	 = id_leaf();
+		if ( src == 1 )
 		{
-			unsigned int Shift{ 31u };
-			unsigned int Index{ ( 1u << Shift ) };
-
-			count = ( count * 2 ) - 1;
-			for ( ; Index; Index >>= 1, Shift-- )
-				if ( count & Index ) break;
-
-			return Shift;
-		};
-
-		auto	  &cpu0		  = cpu_ids.front();
-		// first step: parse available information
-		const auto maxp		  = cpu0.max_leaf();
-		const auto sourceLeaf = ( maxp < 0xB ) ? 1u : ( maxp < 0x1f ) ? 0x0b : 0x1f;
-		if ( sourceLeaf == 1 )
-		{
-			/*  MaximumAddressibleIdsPhysicalPackage:	CPUID.1.EBX[23:16]
-			 *	requires:	CPUID.1.EDX[28].HTT == 1
-			 */
-			unsigned shf0, shf1;
-			if ( !cpu0( cpu_feature::HTT ) ) shf0 = shf1 = create_topology_shift( 1 );
+			if ( !cpu0( cpu_feature::HTT ) ) return create_topology_shift( 1 );
 			else
 			{
-				auto MaximumAddressibleIdsPhysicalPackage =
+				const auto MaximumAddressibleIdsPhysicalPackage =
 					( unsigned ) ( ( cpu0[ 1 ][ 0 ].e.bx >> 16 ) & 0xFF );
+
+				// This would be a 20+ year old platform to not support CPUID.4 … You cannot report
+				// Cores here, a Package == Core and so this only reports SMT within a Package.
 				if ( cpu0.max_leaf() < 4 )
-				{ // This would be a 20+ year old platform to not support CPUID.4
-				  // You cannot report Cores here, a Package == Core and so this only reports SMT
-				  // within a Package.
-					shf0 = shf1 = create_topology_shift( MaximumAddressibleIdsPhysicalPackage );
-				} else
+					return create_topology_shift( MaximumAddressibleIdsPhysicalPackage );
+				else
 				{ /* MaximumAddressibleIdsCores: CPUID.4.0.EAX[31:26] */
 					const auto MaximumAddressibleIdsCores = ( cpu0[ 4 ][ 0 ].e.ax >> 26 ) + 1;
 					// Determine the number of LogicalProcessors per core.
-					const auto LogicalProcessorsPerCore =
-						MaximumAddressibleIdsPhysicalPackage / MaximumAddressibleIdsCores;
-					const auto LogicalProcessorsPerPackage = MaximumAddressibleIdsPhysicalPackage;
-					shf0 = create_topology_shift( LogicalProcessorsPerCore );
-					shf1 = create_topology_shift( LogicalProcessorsPerPackage );
+					if ( d == cpu_domain::LogicalDomain )
+						return create_topology_shift( MaximumAddressibleIdsPhysicalPackage
+													  / MaximumAddressibleIdsCores );
+					else // the top level shift is always the same
+						return create_topology_shift( MaximumAddressibleIdsPhysicalPackage );
 				}
 			}
-			abl.emplace_back( LogicalDomain, shf0, mask_map{} );
-			abl.emplace_back( CoreDomain, shf1, mask_map{} );
+		} else
+		{
+			const auto &sl = cpu0[ id_leaf() ];
+			unsigned	sub{ 0 };
+			for ( ; sl[ sub ].e.bx != 0; ++sub )
+			{
+				// CPUID.B or 1F.x.ECX[15:8] = Level Type / Domain Type
+				// CPUID.B or 1F.x.EAX[4:0] = Level Shift / Domain Shift
+				if ( d == ( ( sl[ sub ].e.cx >> 8 ) & 0xFF ) ) return sl[ sub ].e.ax & 0x1F;
+			}
+			return sl[ sub ].e.ax & 0x1F; // Fallback: top level shift propagates further …
+		}
+	}
+
+	id_mask cpu_topo::level_mask( cpu_domain d ) const noexcept
+	{
+		if ( d <= cpu_domain::LogicalDomain ) return -1u;
+		else return ~( ( 1 << level_shift( cpu_domain( d - 1 ) ) ) - 1 );
+	}
+
+	unsigned cpu_topo::create_topology_shift( unsigned int count ) const noexcept
+	{
+		unsigned int Shift{ 31u };
+		unsigned int Index{ ( 1u << Shift ) };
+
+		count = ( count * 2 ) - 1;
+		for ( ; Index; Index >>= 1, Shift-- )
+			if ( count & Index ) break;
+
+		return Shift;
+	};
+
+	unsigned cpu_topo::id_leaf( int index ) const
+	{
+		const auto maxl = cpu_ids[ index ].max_leaf();
+		return ( maxl >= 0x1f ? 0x1fu : ( maxl >= 0xB ) ? 0xbu : 1 );
+	}
+
+	void cpu_topo::parse_topology()
+	{
+		apicid_bit_layouts abl;
+		auto			  &cpu0 = cpu_ids.front();
+		if ( id_leaf() == 1 )
+		{
+			abl.emplace_back( LogicalDomain, level_shift( LogicalDomain ), mask_map{} );
+			abl.emplace_back( CoreDomain, level_shift( CoreDomain ), mask_map{} );
 			abl.top_domain = ModuleDomain;
 		} else
 		{
-			const auto &sl = cpu0[ sourceLeaf ];
+			const auto &sl = cpu0[ id_leaf() ];
 			for ( unsigned sub{ 0 }; sl[ sub ].e.bx != 0; ++sub )
 			{
 				// CPUID.B or 1F.x.ECX[15:8] = Level Type / Domain Type
@@ -138,7 +162,7 @@ namespace cpu_info
 		unsigned	domain_shift, cpu_cnt{ ( unsigned ) cpu_ids.size() };
 		const auto &ca{ abl };
 		for ( ; index < top_domain; ++index )
-		{
+		{	// previous shift makes up current mask (see level_mask() implementation)
 			abl[ index ].relative_masks.emplace( index, ~( ( 1 << prev_bit ) - 1 ) );
 			prev_bit = ca[ index ].shift;
 		}
@@ -149,23 +173,11 @@ namespace cpu_info
 					( ~ca[ nxt_index ].relative_masks[ nxt_index ] )
 						& ( ca[ index ].relative_masks[ index ] ) );
 
-#define X( name ) #name,
-		static constexpr const char *lvl_base_names[] = { CPU_DOMAINS( X ) };
-#undef X
-		level_masks_names.clear();
-		// produce topology masks depending on what we got
-		for ( index = 0u; index <= top_domain; index++ )
-			if ( ca[ index ].shift != 0 )
-				level_masks_names.emplace(
-					ca[ index ].domain,
-					make_pair( ca[ index ].relative_masks[ index ],
-							   index == top_domain ? "_pkg_"
-												   : lvl_base_names[ ca[ index ].domain ] ) );
 		// at last, build the counter-map and update all cpu_ids
 		lvl_ids.clear(), lvl_ids.resize( top_domain + 1 );
 		for ( unsigned cpu{}; cpu < cpu_cnt; cpu++ )
 		{
-			id_list id;
+			// id_list id;
 			for ( index = 0, domain_shift = 0; index < top_domain; index++ )
 			{
 				if ( ca[ index ].shift != 0 )
@@ -174,14 +186,14 @@ namespace cpu_info
 						( ca[ index ].relative_masks[ top_domain ] & ( apic_id ) cpu_ids[ cpu ] )
 						>> domain_shift;
 					lvl_ids[ index ][ domain_index ]++;
-					id.push_back( domain_index );
+					// id.push_back( domain_index );
 				}
 				domain_shift = abl[ index ].shift;
 			}
 			lvl_ids[ index ]
 				   [ ( ca[ top_domain ].relative_masks[ top_domain ] & ( apic_id ) cpu_ids[ cpu ] )
 					 >> ca[ top_domain - 1 ].shift ]++;
-			cpu_ids[ cpu ].masked_ids = id;
+			// cpu_ids[ cpu ].masked_ids = id;
 		}
 	}
 } // namespace cpu_info
