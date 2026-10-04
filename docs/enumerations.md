@@ -47,9 +47,9 @@ On such occasions, modern C++ should introduce a "cookie-type" (or "key type") t
 
 Thus, the default "parameterless" CTor will query the current process affinity, while a call to `cpu_set::cpu_set( init_type::empty )` will indeed return an empty set.
 
-***ATTENTION:*** on Windows, an application is bound to a single cpu group, unless explicitly configured differently.  Most desktop systems have only one cpu group, but in case there were more, this group id is necessary!
-
-Thus, the "create empty set" CTor call will also query the system on Windows. It keeps the group id and discards the process affinity mask.
+> ***ATTENTION:*** on Windows, an application is bound to a single cpu group, unless explicitly configured differently.  Most desktop systems have only one cpu group, but in case there were more, this group id is necessary!
+>
+> Thus, the "create empty set" CTor call will also query the system on Windows. It keeps the group id and discards the process affinity mask.
 
 ---
 
@@ -57,7 +57,19 @@ Thus, the "create empty set" CTor call will also query the system on Windows. It
 
 This enum represents values directly taken out of leaf 0x1a of cpuid.
 
-If you like, please use the X-macro for creating an output string list and output as you wish.
+If you like, please use the X-macro for creating an output string map and output as you wish:
+
+```cpp
+#define X( n, t ) { t, #n },
+	map< int, string > core_types{ { CORE_TYPE( X ){ 0, "NONE" } } };
+#undef X
+```
+
+> P.s.: the addition of the "0"-element just serves security. If `cpuid leaf 0x1a` was not present, zero may be a returned value.
+>
+> Another variation would be to transform the value from its 7 bits into 2 (`v >> 5`), as only values `0x20` and `0x40` are to be expected if that cpuid leaf exists, and `0x00` if it doesn't exist.
+>
+> Any other values are by specification *RESERVED*, so it is not to be expected until the specification changes in that point.
 
 In any other senseful scenarios, please use the `cpu_efficiency` enumeration instead.
 
@@ -68,6 +80,12 @@ In any other senseful scenarios, please use the `cpu_efficiency` enumeration ins
 This enum represents values directly taken out of cpuid.  The values seem purely informational.
 
 If you like, please use the X-macro for creating an output string list and output as you wish.
+
+```cpp
+#define X( n ) #n,
+	constexpr const char* processor_types[] = { PROCESSOR_TYPE( X ) };
+#undef X
+```
 
 ---
 
@@ -95,7 +113,7 @@ Examples:
     const int shift     = info.level_shift( cpu_info::cpu_domain::CoreDomain );
 ```
 
-If you like, please use the X-macro for creating an output string list and output values as you wish.
+If you like, please use the X-macro for creating an output string list and output values as you wish (see [processor type](#cpu_setcpu_processor_type) for X-macro usage example).
 
 ---
 
@@ -116,7 +134,7 @@ The X-Macro signature is: `X( NAME, REG, BIT, LEAF, SUB )`. Thus, to create a ma
 
 ```cpp
 #define X( NAME, ... ) { cpu_info::cpu_features::#NAME, ##NAME },
-    static const unordered_map< cpu_info::cpu_features, std::string > map{ CPU_FEATURES( X ) };
+    static const map< cpu_info::cpu_features, std::string > map{ CPU_FEATURES( X ) };
 #undef X
 ```
 
