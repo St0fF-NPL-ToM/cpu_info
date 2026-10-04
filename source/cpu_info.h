@@ -64,7 +64,7 @@ namespace cpu_info
 		const cpu_id &operator[]( size_t index ) const noexcept { return cpu_ids[ index ]; }
 
 		bool		  knows_efficiency() const noexcept
-		{ return cpu_ids[ 0 ].max_leaf() >= 0x1a; /* core type available */ }
+		{ return cpu_ids[ 0 ].efficiency() != cpu_efficiency::unknownEff; }
 
 	  protected: // internal operations
 		inline unsigned id_leaf( int index = 0 ) const { return cpu_ids[ index ].id_leaf(); }
