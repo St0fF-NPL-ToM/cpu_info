@@ -58,7 +58,7 @@ The interesting part about cpu_id is its base design, deriving from `std::map< u
 
 The basic task is querying one cpu, *and all* information one cpu provides, comes in exactly this form:
 
-- a sparsely filled list of leafs and their subleafs.
+- a sparsely filled list of leafs with their respective (monotonically increasing) subleafs.
 
 Sparsely filled lists are nothing to easily work with, that's why associative arrays were born one day - so this is the reason for the outer shell as a map with the key `unsigned`, representing the leaf number.
 
@@ -87,11 +87,13 @@ You will find the following lines in the source:
 	}
 ```
 
+… as well as a const version of that operator.
+
 This explicitly overwrites the `std::map`'s default behaviour upon using the `operator[]`: in case the key does not exist inside the map, it will be created and a non-const reference to this key's default-created value be returned.
 
 This behaviour is not intended, here.  As a `value` of this map is a `std::vector` - return empty is the simplest option.
 
-Anyhow, as a reference is returned, there is a static L instance to be returned.
+Anyhow, as a reference is returned, there has to be a static L instance as returned reference.
 
 … simply hoping the user checks for emptiness instead of using it right away.
 
@@ -134,6 +136,10 @@ Seems like it really only serves informational value, therefore it is exposed as
 #### `brand_string()`?
 
 Intel® offers multiple ways to discover the "cpu name", as it was sold to the owner.  It depends on the age, there are multiple methods to obtain a string for the cpu name from cpuid.  Which one method is to be used is defined within the cpuid results.  Thus, these strings will be produced upon query.
+
+#### further?
+
+I believe all further queryable options are self-explanatory, or their purpose starts making sense with understanding the result [enumerations](enumerations.md).
 
 ---
 
