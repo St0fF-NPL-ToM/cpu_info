@@ -67,7 +67,6 @@ namespace cpu_info
 		{ return cpu_ids[ 0 ].efficiency() != cpu_efficiency::unknownEff; }
 
 	  protected: // internal operations
-		inline unsigned id_leaf( int index = 0 ) const { return cpu_ids[ index ].id_leaf(); }
 		void			parse_topology();
 	};
 } // namespace cpu_info

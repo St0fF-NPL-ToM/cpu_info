@@ -54,14 +54,14 @@ namespace cpu_info
 	{
 		apicid_bit_layouts abl;
 		auto			  &cpu0 = cpu_ids.front();
-		if ( id_leaf() == 1 )
+		if ( const auto il = cpu0.id_leaf(); il <= 1 )
 		{
 			abl.emplace_back( LogicalDomain, cpu0.domain_shift( LogicalDomain ), mask_map{} );
 			abl.emplace_back( CoreDomain, cpu0.domain_shift( CoreDomain ), mask_map{} );
 			abl.top_domain = ModuleDomain;
 		} else
 		{
-			const auto &sl = cpu0[ id_leaf() ];
+			const auto &sl = cpu0[ il ];
 			for ( unsigned sub{ 0 }; sl[ sub ].e.bx != 0; ++sub )
 			{
 				// CPUID.B or 1F.x.ECX[15:8] = Level Type / Domain Type
