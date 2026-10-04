@@ -1,3 +1,4 @@
+#pragma once
 /**
  * 	cpu_features:	trying to get Intel's official code from
  *
@@ -5,10 +6,9 @@
  *
  * 				ported to a simple cpp class … does not work.
  *
- *  This is the header of the cpu_features enumeration
+ *  This is the header declaring cpu_features and other enumeration types, abstracted from the
+ *	Intel® CPU specification papers.
  */
-#pragma once
-
 namespace cpu_info
 {
 	/*

@@ -15,16 +15,10 @@ classDiagram
         +unsigned int dx
     }
 
-    class cpuid_leafs {
-        #unsigned _maxLeaf
+    class cpu_id {
         #retrieve(unsigned leaf) List~cpuid_result~
         +operator[](unsigned leaf) List~cpuid_result~
-        +max_leafs() unsigned
-    }
-
-    class cpu_id {
-        -int fmt_width
-        -id_list masked_ids
+        +max_leaf() unsigned
         +operator bool() bool
         +operator apic_id() apic_id
         +operator string() string
@@ -40,7 +34,6 @@ classDiagram
     }
 
     class mask_map {
-        +operator[](unsigned key) id_mask
     }
 
     class apicid_bit_layout {
@@ -56,19 +49,12 @@ classDiagram
     }
 
     class cpu_topo {
-        -unsigned sourceLeaf
         +cpu_set process_affinity
         +List~cpu_id~ cpu_ids
-        +Map~unsigned,pair~ level_masks_names
         +List~Map~ lvl_ids
-        +apicid_bit_layouts abl
         +countLevel(cpu_domain lvl) int
         +id(size_t index) cpu_id
-        +optimalProcessAffinity(int thread_count, bool prefer_performance) id_list
-        #build_idlist() void
         #parse_topology() void
-        #create_topology_shift(unsigned count) unsigned
-        #finish_topology() void
     }
 
     class cpu_set {
@@ -119,13 +105,12 @@ classDiagram
         performant
     }
 
-    cpu_id --|> cpuid_leafs : inherits
     cpu_topo "1" *-- "0..*" cpu_id : cpu_ids
     cpu_topo "1" *-- "1" cpu_set : process affinity
     cpu_topo "1" *-- "1" apicid_bit_layouts : abl
     apicid_bit_layouts "1" *-- "0..*" apicid_bit_layout : contains
     apicid_bit_layout "1" *-- "1" mask_map : relative masks
-    cpuid_leafs "1" o-- "0..*" cpuid_result : stores
+    cpu_id "1" o-- "0..*" cpuid_result : stores
     cpu_id ..> cpu_feature : checks
     cpu_id ..> cpu_processor_type : returns
     cpu_id ..> cpu_core_type : returns

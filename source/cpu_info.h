@@ -5,24 +5,24 @@
  * 				https://github.com/intel/SDM-Processor-Topology-Enumeration
  *
  * 				ported to a simple cpp class …
- * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * ================================================================================================
+ *
+ *	… was not as simple as I thought at first ;) … but here it is:
  *
  *	Implementation progress:
  * ==========================
  * 	Step #1✓:	simple cpu enumeration on a system with subclassing by CPU domains
  * 				- query count of CPUs of a domain
  * 				- retrieve (un)masked APIC IDs per cpu
- * 	→ 	Solves the question of "how many threads do make sense in certain scenarios"
- *		by comparing different level counts.
- *	→	[x] feature-complete!
  *
  * 	Step #2✓:	query (if available) core_types (efficiency/performance etc.)
  *				→ class will enumerate all available CPUIDs ON EVERY SINGLE LOGICAL CPU
  *				→ query caps extended to all feature-bits found in the intel docs,
  *
  * 	Step #3✗:	also query "memory"-items, so scoring by shared / non-shared ids becomes possible.
+ *				Postponed as: over-engineering.
  *
- *	Step #4✓:	Implement platform-independent 'cpu_set'.  It's mostly called the same on both
+ *	Step #4✓:	Implement platform-independent 'cpu_set'. It's mostly called the same on both
  *			 	 platforms of current interest, but implemented differently.
  */
 #include <cpu_id.h>	   // include the code to acquire necessary data
@@ -67,6 +67,6 @@ namespace cpu_info
 		{ return cpu_ids[ 0 ].efficiency() != cpu_efficiency::unknownEff; }
 
 	  protected: // internal operations
-		void			parse_topology();
+		void parse_topology();
 	};
 } // namespace cpu_info
