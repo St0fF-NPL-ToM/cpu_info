@@ -24,7 +24,6 @@
 
 #include <set>
 #include <ranges>
-#include <format>
 
 namespace cpu_info
 {
@@ -71,10 +70,10 @@ namespace cpu_info
 	 */
 	cpu_id::cpu_id()
 		: M()
-		, _maxLeaf( emplace( 0u, L{ cpuid( 0, 0 ) } ).first->second.front().e.ax )
 	{
+		const auto ml = emplace( 0u, L{ cpuid( 0, 0 ) } ).first->second.front().e.ax;
 		// create the CPUID-LEAFS map:
-		for ( unsigned leaf: views::iota( 0u, _maxLeaf ) ) retrieve( leaf + 1 );
+		for ( unsigned leaf: views::iota( 0u, ml ) ) retrieve( leaf + 1 );
 	}
 	/*
 	 *	The following function is modeled after INTEL's documentation.  As the CTor calls tries
@@ -104,7 +103,7 @@ namespace cpu_info
 			{ 0x28, 0x07010200u + 1 },	// This leaf is valid if CPUID.07H.01H:ECX.RDT_A_SYM[1] = 1
 		}; // clang-format on
 		// any prerequisites to take …
-		if ( leaf > _maxLeaf || reserved.contains( leaf ) ) return _invalid;
+		if ( reserved.contains( leaf ) ) return _invalid;
 		if ( requirements.contains( leaf ) ) // need a check
 		{
 			const auto &req = requirements.at( leaf );
@@ -183,28 +182,52 @@ namespace cpu_info
 #pragma region info ... using such a cpuid_leafs
 	cpu_id::operator apic_id() const noexcept
 	{
-		if ( _maxLeaf < 0x0b ) return at( 1 )[ 0 ].e.bx >> 24;
-		else if ( _maxLeaf < 0x1f ) return at( 0xb )[ 0 ].e.dx;
-		else return at( 0x1f )[ 0 ].e.dx;
+		const auto sl = id_leaf();
+		if ( sl > 1 ) return at( sl )[ 0 ].e.dx;
+		else if ( sl ) return at( 1 )[ 0 ].e.bx >> 24;
+		else return -1u; // illegal!
 	}
 
-	apic_id cpu_id::id( cpu_domain domain ) const noexcept
+	int cpu_id::domain_shift( cpu_domain d ) const noexcept
 	{
-		auto id = ( apic_id ) ( *this );		  // fallback to full id
-		if ( domain > cpu_domain::LogicalDomain ) // as that would be LogicalDomain
-		{										  // get shift information
-			const auto leaf = _maxLeaf >= 0x1f ? 0x1f : _maxLeaf < 0x0b ? 1 : 0x0b;
-			if ( leaf > 1 ) // modern method - using leafs b / 1f
+		const auto il = id_leaf();
+		if ( il <= 1 ) // catch "illegal object" as "don't know anything"
+		{
+			if ( !( *this )( cpu_feature::HTT ) ) return create_topology_shift( 1 );
+			else
 			{
-				const auto subleaf = ( domain - cpu_domain::CoreDomain );
-				if ( at( leaf ).size() > subleaf ) id >>= ( at( leaf )[ subleaf ].e.ax & 0x1F );
-			} else if ( !( *this )( cpu_feature::HTT ) ) id >>= create_topology_shift( 1 );
-			else if ( const auto MaxIdsPhysical = ( ( at( 1 )[ 0 ].e.bx >> 16 ) & 0xFF );
-					  _maxLeaf >= 4 && domain == CoreDomain )
-				id >>= MaxIdsPhysical / ( ( at( 4 )[ 0 ].e.ax >> 26 ) + 1 );
-			else id >>= MaxIdsPhysical;
+				const auto MaxIdsPhysical = ( unsigned ) ( ( at( 1 )[ 0 ].e.bx >> 16 ) & 0xFF );
+				// This would be a 20+ year old platform to not support CPUID.4 … You cannot report
+				// Cores here, a Package == Core and so this only reports SMT within a Package.
+				if ( max_leaf() < 4 || d != cpu_domain::LogicalDomain )
+					return create_topology_shift( MaxIdsPhysical );
+				else /* MaximumAddressibleIdsCores: CPUID.4.0.EAX[31:26] */
+					return create_topology_shift( MaxIdsPhysical
+												  / ( ( at( 4 )[ 0 ].e.ax >> 26 ) + 1 ) );
+			}
+		} else
+		{
+			const auto &sl = at( il );
+			unsigned	sub{ 0 };
+			for ( ; sl[ sub ].e.bx != 0; ++sub )
+			{
+				// CPUID.B or 1F.x.ECX[15:8] = Level Type / Domain Type
+				// CPUID.B or 1F.x.EAX[4:0] = Level Shift / Domain Shift
+				if ( d == ( ( sl[ sub ].e.cx >> 8 ) & 0xFF ) ) return sl[ sub ].e.ax & 0x1F;
+			}
+			return sl[ sub ].e.ax & 0x1F; // Fallback: top level shift propagates further …
 		}
-		return id;
+	}
+
+	id_mask cpu_id::domain_mask( cpu_domain d ) const noexcept
+	{
+		if ( d <= cpu_domain::LogicalDomain ) return -1u;
+		// was ist nochmal die korrekte Domain Mask?  Bedeutet ja, dass 0-basierte Indices
+		// rauskommen! Logical/Invalid: 0b1111… komplette ID Core: 	shift( Logical )= 1	→ in meinem
+		// Falle: 0b01111110 Module: 	shift( Core ) 	= 7
+		const auto ps = domain_shift( cpu_domain( d - 1 ) );
+		const auto ds = domain_shift( d );
+		return ( ( 1 << ds ) - 1 ) ^ ( ( 1 << ps ) - 1 );
 	}
 
 	bool cpu_id::operator()( cpu_feature feature ) const noexcept
@@ -241,13 +264,13 @@ namespace cpu_info
 
 	cpu_core_type cpu_id::core_type() const noexcept
 	{
-		if ( _maxLeaf >= 0x1a ) return cpu_core_type( at( 0x1a )[ 0 ].e.ax >> 24 );
+		if ( max_leaf() >= 0x1a ) return cpu_core_type( at( 0x1a )[ 0 ].e.ax >> 24 );
 		else return cpu_core_type::DUNNO;
 	}
 
 	unsigned cpu_id::core_model() const noexcept
 	{
-		if ( _maxLeaf >= 0x1a ) return at( 0x1a )[ 0 ].e.ax & 0xffffff;
+		if ( max_leaf() >= 0x1a ) return at( 0x1a )[ 0 ].e.ax & 0xffffff;
 		else return 0u;
 	}
 
@@ -307,7 +330,7 @@ namespace cpu_info
 
 	cpu_efficiency cpu_id::efficiency() const noexcept
 	{
-		if ( _maxLeaf >= 0x1a )
+		if ( max_leaf() >= 0x1a )
 			return ( ( at( 0x1a )[ 0 ].e.ax & 0x70000000u ) > 0x20000000u ? performant
 																		  : effficient );
 		else return unknownEff;
