@@ -10,17 +10,18 @@ set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
 # create the library
 add_subdirectory( source )
+add_subdirectory( docs )
+add_subdirectory( debugging )
 
 set( DOCS README.md LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md )
 target_sources( cpu_info PRIVATE ${DOCS} )
+source_group( DOCS FILES ${DOCS} )
 
 add_library( cpu_info::cpu_info ALIAS cpu_info )
 target_include_directories( cpu_info PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/source/>
     $<INSTALL_INTERFACE:include>
 )
-
-source_group( DOCS FILES ${DOCS} )
 
 install( TARGETS cpu_info EXPORT cpu_infoTargets
 	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

@@ -1,11 +1,19 @@
-
+/**
+ *	cpu_info - first basic example
+ *	==============================
+ *	This example basically shows how to use the cpu_info namespace.
+ *
+ *	starting to include the library:
+ */
+#include <cpu_info.h>
 #include <iostream>
-#include "cpu_info.h"
 #include <ranges>
 
+// To keep it simple, let's "use" both namespaces
 using namespace std;
 using namespace cpu_info;
 
+// I never understood, why stl doesn't provide at least a partial template instantiation like this …
 template < typename T >
 ostream& operator<<( ostream& s, const vector< T >& v )
 {
@@ -14,7 +22,10 @@ ostream& operator<<( ostream& s, const vector< T >& v )
 	return s;
 }
 
-// produce constant tables for output
+/**
+ *	The following shows a way to use the X-macros of cpu_enums_intel.h
+ *	to provide some useful output data sources:
+ */
 #define X( n ) #n,
 constexpr const char* domains[] = { CPU_DOMAINS( X ) };
 constexpr const char* types[]	= { PROCESSOR_TYPE( X ) };
@@ -22,21 +33,32 @@ constexpr const char* types[]	= { PROCESSOR_TYPE( X ) };
 #define X( n, v ) #n,
 constexpr const char* effs[] = { EFFICIENCY_TYPE( X ) };
 #undef X
+/**
+ *	The CORE_TYPE macro is a little special - please consult the enumerations via an AST.
+ *
+ *	The final enumeration is non-continuous (same applies to the features enumeration),
+ *	thus neither a constexpr, nor a vector do make any sense.  A map or unordered_map needs
+ *	to be built.
+ */
 #define X( n, t ) { t, #n },
-const map< int, string > cores{ { CORE_TYPE( X ){ 0, "NONE" } } };
+const map< int, string > cores{ { CORE_TYPE( X ) } };
 #undef X
+
+// as recommended, provide a global instance of cpu_topo
+cpu_topo   info;
 
 int main( int argc, const char* argv[] )
 {
-	cpu_topo   brot;
-	const auto md = brot.max_domain();
+	// Query largest domain, then output the numbers of respective domain members
+	const auto md = info.max_domain();
 	for ( auto d{ cpu_domain::LogicalDomain }; d <= md; d = cpu_domain( d + 1 ) )
-		cout << format( "{:13s}: {:d}\n", domains[ d ], brot.count_domain( d ) );
+		cout << format( "{:13s}: {:d}\n", domains[ d ], info.count_domain( d ) );
 
+	// further querying options: id's, type information, efficiencies
 	cout << endl << "apic-ids and types:" << endl;
-	for ( auto i: views::iota( 0ull, brot.count() ) )
+	for ( auto i: views::iota( 0ull, info.count() ) )
 	{
-		const auto&	   bi = brot[ i ];
+		const auto&	   bi = info[ i ];
 		const auto	   id = ( apic_id ) bi;
 		const unsigned mv =
 			( bi.family() << 16 ) | ( bi.model() << 8 ) | ( bi.type() << 4 ) | bi.stepping();
