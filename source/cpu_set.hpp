@@ -94,6 +94,14 @@ namespace cpu_info
 			: cpu_set( init_type::empty )
 		{ CPU_SET_S( logical_cpu, sz, set ); }
 
+		cpu_set( const cpu_set& o )
+			: sz( CPU_COUNT( o.set ) )
+			, set( CPU_ALLOC( sz ) )
+		{
+			CPU_ZERO_S( sz, set );
+			CPU_OR_S( sz, set, set, o.set );
+		}
+
 		~cpu_set() noexcept
 		{
 			if ( set )
@@ -190,6 +198,8 @@ namespace cpu_info
 				( KAFFINITY ) ( 1 << std::min( ( DWORD ) logical_cpu,
 											   GetActiveProcessorCount( ga.Group ) - 1 ) );
 		}
+		cpu_set( const cpu_set& o ) = default;
+
 				operator bool() const noexcept { return ga.Group != ALL_PROCESSOR_GROUPS; }
 
 		cpu_set operator|( const cpu_set& o ) const noexcept
