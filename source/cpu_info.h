@@ -65,12 +65,9 @@ namespace cpu_info
 
 		bool		  knows_efficiency() const noexcept
 		{ return cpu_ids[ 0 ].max_leaf() >= 0x1a; /* core type available */ }
-		// retrieve system domain information
-		int		level_shift( cpu_domain domain ) const noexcept;
-		id_mask level_mask( cpu_domain domain ) const noexcept;
 
 	  protected: // internal operations
-		inline unsigned id_leaf( int index = 0 ) const;
+		inline unsigned id_leaf( int index = 0 ) const { return cpu_ids[ index ].id_leaf(); }
 		void			parse_topology();
 	};
 } // namespace cpu_info

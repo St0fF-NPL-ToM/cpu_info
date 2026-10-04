@@ -63,11 +63,20 @@ namespace cpu_info
 			if ( contains( leaf ) ) return at( leaf );
 			else return _invalid;
 		}
-		unsigned		   max_leaf() const noexcept { return _maxLeaf; }
+				 operator bool() const noexcept { return !empty(); }
+				 operator apic_id() const noexcept;
+		unsigned max_leaf() const noexcept { return ( *this ? at( 0 )[ 0 ].e.ax : 0u ); }
+		unsigned id_leaf() const noexcept
+		{
+			const auto ml = max_leaf();
+			return ml ? ml < 0x1f ? ml < 0x0b ? 1 : 0x0b : 0x1f : 0;
+		}
+		int		domain_shift( cpu_domain domain ) const noexcept;
+		id_mask domain_mask( cpu_domain domain ) const noexcept;
+		// USE WITH AWARENESS!
+		apic_id masked_id( cpu_domain domain ) const noexcept
+		{ return ( ( ( apic_id ) ( *this ) ) & domain_mask( domain ) ) >> domain_shift( domain ); }
 
-						   operator bool() const noexcept { return !empty(); }
-						   operator apic_id() const noexcept;
-		apic_id			   id( cpu_domain domain = LogicalDomain ) const noexcept;
 		bool			   operator()( cpu_feature feature ) const noexcept;
 		uint8_t			   stepping() const noexcept;
 		uint8_t			   family() const noexcept;
@@ -79,8 +88,7 @@ namespace cpu_info
 		cpu_efficiency	   efficiency() const noexcept;
 
 	  protected:
-		L			  &retrieve( unsigned leaf ) noexcept;
-		static L	   _invalid;
-		const unsigned _maxLeaf{ 0 }; // initialized upon construction!
+		L		&retrieve( unsigned leaf ) noexcept;
+		static L _invalid;
 	};
 } // namespace cpu_info

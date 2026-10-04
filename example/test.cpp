@@ -42,12 +42,8 @@ int main( int argc, const char* argv[] )
 			( bi.family() << 16 ) | ( bi.model() << 8 ) | ( bi.type() << 4 ) | bi.stepping();
 		vector< string > mi;
 		for ( cpu_domain ii{ cpu_info::LogicalDomain }; ii < md; ii = cpu_domain( ii + 1 ) )
-		{
-			const auto s = brot.level_shift( ii );
-			const auto m = brot.level_mask( ii );
-			mi.push_back(
-				format( "{:#06X}", ( id & m ) >> s ) );
-		}
+			mi.push_back( format( "{:#06X}", bi.masked_id( ii ) ) );
+
 		cout << format( "{:02d}: {:#06X} ({:06x}.{:06x}, '{:s}', {:s} ({:s}) ) masked ids: ", i, id,
 						mv, bi.core_model(), bi.brand_string(), cores.at( bi.core_type() ),
 						effs[ bi.efficiency() ] )
