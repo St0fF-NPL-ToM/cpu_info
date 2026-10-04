@@ -5,14 +5,6 @@
  * 				https://github.com/intel/SDM-Processor-Topology-Enumeration
  *
  * 				ported to a simple cpp class …
- *
- * 	Usage:
- * ========
- * 	namespace 'cpu_info' functions:
- * 		cpuid_result	call_cpuid( Leaf, Sub ) 		→ execute the respective CPUID
- *		void 			bind_thread_to_cpu( cpuNumber ) → what it's called …
- *		unsigned 		get_logical_cpu_count() 		→ again, the naming speaks …
- *
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  *
  *	Implementation progress:
@@ -57,12 +49,13 @@ namespace cpu_info
 
 		cpu_topo(); // throws in case CPUID instruction is not available
 					// or thread affinity cannot be set.
-		void   refresh() noexcept;
+		void	   refresh() noexcept;
 
 		// returns the number of logical cpus accessible to the callee (without further OS calls)
-		size_t count() const noexcept { return cpu_ids.size(); }
+		size_t	   count() const noexcept { return cpu_ids.size(); }
+		cpu_domain max_domain() const noexcept { return cpu_domain( lvl_ids.size() ); }
 		// count items of a specific domain (like logical cpu count, core count, tile, package)
-		size_t countLevel( cpu_domain lvl ) const noexcept
+		size_t	   count_domain( cpu_domain lvl ) const noexcept
 		{
 			if ( lvl == cpu_domain::InvalidDomain || lvl_ids.size() < ( size_t ) lvl ) return 1;
 			return lvl_ids[ lvl - 1 ].size();
@@ -70,15 +63,14 @@ namespace cpu_info
 		// throwing accessor, throws in case of invalid index
 		const cpu_id &operator[]( size_t index ) const noexcept { return cpu_ids[ index ]; }
 
-		bool		  knowsEfficiency() const noexcept
-		{ return cpu_ids[ 0 ]._maxLeaf >= 0x1a; /* core type available */ }
+		bool		  knows_efficiency() const noexcept
+		{ return cpu_ids[ 0 ].max_leaf() >= 0x1a; /* core type available */ }
 		// retrieve system domain information
 		int		level_shift( cpu_domain domain ) const noexcept;
 		id_mask level_mask( cpu_domain domain ) const noexcept;
 
 	  protected: // internal operations
-		unsigned create_topology_shift( unsigned int count ) const noexcept;
 		inline unsigned id_leaf( int index = 0 ) const;
-		void parse_topology();
+		void			parse_topology();
 	};
 } // namespace cpu_info

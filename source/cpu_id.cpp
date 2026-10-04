@@ -62,7 +62,6 @@ namespace cpu_info
 	}
 
 	/* static */
-	int		cpu_id::fmt_width{ 2 };
 	cpu_id::L cpu_id::_invalid{};
 
 #pragma region leafs ... collection of cpuid data
@@ -191,21 +190,21 @@ namespace cpu_info
 
 	apic_id cpu_id::id( cpu_domain domain ) const noexcept
 	{
-		if ( domain != cpu_domain::InvalidDomain && ( unsigned ) domain <= masked_ids.size() )
-			return masked_ids[ ( size_t ) domain - 1 ];
-		else return this->operator apic_id(); // fallback to full id
-	}
-
-	cpu_id::operator string() const noexcept
-	{
-		string list, fmtstr = '{' + format( ":#0{:d}X", fmt_width + 2 ) + '}';
-		for ( auto i( 0u ); i < masked_ids.size(); ++i )
-		{
-			if ( !list.empty() ) list.insert( list.begin(), ':' );
-			list.insert( 0, vformat( fmtstr, make_format_args( masked_ids[ i ] ) ) );
+		auto id = ( apic_id ) ( *this );		  // fallback to full id
+		if ( domain > cpu_domain::LogicalDomain ) // as that would be LogicalDomain
+		{										  // get shift information
+			const auto leaf = _maxLeaf >= 0x1f ? 0x1f : _maxLeaf < 0x0b ? 1 : 0x0b;
+			if ( leaf > 1 ) // modern method - using leafs b / 1f
+			{
+				const auto subleaf = ( domain - cpu_domain::CoreDomain );
+				if ( at( leaf ).size() > subleaf ) id >>= ( at( leaf )[ subleaf ].e.ax & 0x1F );
+			} else if ( !( *this )( cpu_feature::HTT ) ) id >>= create_topology_shift( 1 );
+			else if ( const auto MaxIdsPhysical = ( ( at( 1 )[ 0 ].e.bx >> 16 ) & 0xFF );
+					  _maxLeaf >= 4 && domain == CoreDomain )
+				id >>= MaxIdsPhysical / ( ( at( 4 )[ 0 ].e.ax >> 26 ) + 1 );
+			else id >>= MaxIdsPhysical;
 		}
-		const unsigned ai = apic_id( *this );
-		return vformat( fmtstr + ":({:s})", make_format_args( ai, list ) );
+		return id;
 	}
 
 	bool cpu_id::operator()( cpu_feature feature ) const noexcept
@@ -240,13 +239,13 @@ namespace cpu_info
 	cpu_processor_type cpu_id::type() const noexcept
 	{ return static_cast< cpu_processor_type >( ( at( 1 )[ 0 ].e.ax >> 12 ) & 0b11 ); }
 
-	cpu_core_type cpu_id::coreType() const noexcept
+	cpu_core_type cpu_id::core_type() const noexcept
 	{
 		if ( _maxLeaf >= 0x1a ) return cpu_core_type( at( 0x1a )[ 0 ].e.ax >> 24 );
 		else return cpu_core_type::DUNNO;
 	}
 
-	unsigned cpu_id::coreModel() const noexcept
+	unsigned cpu_id::core_model() const noexcept
 	{
 		if ( _maxLeaf >= 0x1a ) return at( 0x1a )[ 0 ].e.ax & 0xffffff;
 		else return 0u;
