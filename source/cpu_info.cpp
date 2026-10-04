@@ -97,18 +97,6 @@ namespace cpu_info
 		else return ~( ( 1 << level_shift( cpu_domain( d - 1 ) ) ) - 1 );
 	}
 
-	unsigned cpu_topo::create_topology_shift( unsigned int count ) const noexcept
-	{
-		unsigned int Shift{ 31u };
-		unsigned int Index{ ( 1u << Shift ) };
-
-		count = ( count * 2 ) - 1;
-		for ( ; Index; Index >>= 1, Shift-- )
-			if ( count & Index ) break;
-
-		return Shift;
-	};
-
 	unsigned cpu_topo::id_leaf( int index ) const
 	{
 		const auto maxl = cpu_ids[ index ].max_leaf();

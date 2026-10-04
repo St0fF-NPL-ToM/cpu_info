@@ -27,7 +27,15 @@ namespace cpu_info
 	using id_list = vector< apic_id >;
 	using id_mask = unsigned;
 
-
+	constexpr unsigned create_topology_shift( unsigned int count )
+	{
+		unsigned int Shift{ 31u };
+		unsigned int Index{ ( 1u << Shift ) };
+		count = ( count * 2 ) - 1;
+		for ( ; Index; Index >>= 1, Shift-- )
+			if ( count & Index ) break;
+		return Shift;
+	};
 
 	class mask_map : public map< unsigned, id_mask >
 	{

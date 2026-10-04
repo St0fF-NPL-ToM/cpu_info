@@ -44,10 +44,6 @@ namespace cpu_info
 	 */
 	class cpu_id : public map< unsigned, vector< cpuid_result > >
 	{
-		friend class cpu_topo;
-		static int fmt_width;	 // static - will be set according to maximum apic_id encountered.
-		id_list	   masked_ids{}; // domain-masked apic_ids (needed???)
-
 	  public:
 		// actually execute cpuid( leaf, subleaf )
 		static cpuid_result cpuid( unsigned Leaf, unsigned Subleaf ) noexcept;
@@ -72,14 +68,13 @@ namespace cpu_info
 						   operator bool() const noexcept { return !empty(); }
 						   operator apic_id() const noexcept;
 		apic_id			   id( cpu_domain domain = LogicalDomain ) const noexcept;
-						   operator string() const noexcept;
 		bool			   operator()( cpu_feature feature ) const noexcept;
 		uint8_t			   stepping() const noexcept;
 		uint8_t			   family() const noexcept;
 		uint8_t			   model() const noexcept;
 		cpu_processor_type type() const noexcept;
-		cpu_core_type	   coreType() const noexcept;
-		unsigned		   coreModel() const noexcept;
+		cpu_core_type	   core_type() const noexcept;
+		unsigned		   core_model() const noexcept;
 		string			   brand_string() const noexcept;
 		cpu_efficiency	   efficiency() const noexcept;
 

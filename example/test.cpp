@@ -14,33 +14,44 @@ ostream& operator<<( ostream& s, const vector< T >& v )
 	return s;
 }
 
+// produce constant tables for output
+#define X( n ) #n,
+constexpr const char* domains[] = { CPU_DOMAINS( X ) };
+constexpr const char* types[]	= { PROCESSOR_TYPE( X ) };
+#undef X
+#define X( n, v ) #n,
+constexpr const char* effs[] = { EFFICIENCY_TYPE( X ) };
+#undef X
+#define X( n, t ) { t, #n },
+const map< int, string > cores{ { CORE_TYPE( X ){ 0, "NONE" } } };
+#undef X
+
 int main( int argc, const char* argv[] )
 {
 	cpu_topo   brot;
-	const auto logical	= brot.countLevel( cpu_domain::LogicalDomain );
-	const auto physical = brot.countLevel( cpu_domain::CoreDomain );
-	cout << "logical : " << logical << ",\n"
-		 << "physical: " << physical << ",\n"
-		 << "modules : " << brot.countLevel( cpu_domain::ModuleDomain ) << endl;
+	const auto md = brot.max_domain();
+	for ( auto d{ cpu_domain::LogicalDomain }; d <= md; d = cpu_domain( d + 1 ) )
+		cout << format( "{:13s}: {:d}\n", domains[ d ], brot.count_domain( d ) );
 
 	cout << endl << "apic-ids and types:" << endl;
-#define X( n, t ) { t, #n },
-	map< int, string > cores{ { CORE_TYPE( X ){ 0, "NONE" } } };
-#undef X
-#define X( n ) #n,
-	vector< string > types{ { PROCESSOR_TYPE( X ) } };
-#undef X
-#define X( n, v ) #n,
-	vector< string > effs{ { EFFICIENCY_TYPE( X ) } };
-#undef X
 	for ( auto i: views::iota( 0ull, brot.count() ) )
 	{
 		const auto&	   bi = brot[ i ];
+		const auto	   id = ( apic_id ) bi;
 		const unsigned mv =
 			( bi.family() << 16 ) | ( bi.model() << 8 ) | ( bi.type() << 4 ) | bi.stepping();
-		cout << format( "{:02d}: {:s} ({:06x}.{:06x}, '{:s}', {:s} ({:s}) )\n", i, ( string ) bi,
-						mv, bi.coreModel(), bi.brand_string(), cores[ bi.coreType() ],
-						effs[ bi.efficiency() ] );
+		vector< string > mi;
+		for ( cpu_domain ii{ cpu_info::LogicalDomain }; ii < md; ii = cpu_domain( ii + 1 ) )
+		{
+			const auto s = brot.level_shift( ii );
+			const auto m = brot.level_mask( ii );
+			mi.push_back(
+				format( "{:#06X}", ( id & m ) >> s ) );
+		}
+		cout << format( "{:02d}: {:#06X} ({:06x}.{:06x}, '{:s}', {:s} ({:s}) ) masked ids: ", i, id,
+						mv, bi.core_model(), bi.brand_string(), cores.at( bi.core_type() ),
+						effs[ bi.efficiency() ] )
+			 << mi << endl;
 	}
 	return 0;
 }
