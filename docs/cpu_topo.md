@@ -23,23 +23,24 @@ The overall question just being: how can I spread different kinds of tasks optim
 
 Therefore the `cpu_topo` constructor does the following things in order:
 
-- queries the active `cpu_set` of the process
-- queries the logical cpu count
-- in a loop: binds the calling thread to each logical core and obtains all cpuid leafs at once
-- parses the topology from the cpu_id's
-- re-applies the process affinity mask
+- queries the active `cpu_set` of the process (e.g. current affinity mask)
+- calls `refresh()`:
+  - queries the logical cpu count
+  - in a loop: binds the calling thread to each logical core and obtains all cpuid leafs at once
+  - parses the topology from the cpu_id's
+  - re-applies the process affinity mask
 
-This construction process can take a considerate amount of time depending on the number of logical cpus available and the context switching overhead necessary to change the process affinity.
+This process can take a considerate amount of time depending on the number of logical cpus available and the context switching overhead necessary to change the process affinity.
 
 It is therefore ***recommended*** to create a single instance of `cpu_topo` and make it globally available to your code - or any means of personal choice to make sure only a single instance is created.
+
+*A 2nd recommendation:* in case you expect the system running your application to support CPU hot-plugging, please watch those events and call `cpu_topo::refresh()` on changes.
 
 ---
 
 ### class contents
 
 After creation, this class serves as an informational container.
-
-Nowadays there is indeed CPU-hotplugging possible - in case hot-plugging is supported, there is the `refresh()` function to be called.  It simply clears internal state an repeats the initialization procedure.
 
 The members are:
 
@@ -52,16 +53,15 @@ The members are:
                                             // The `countLevel` function uses these entries.
 ```
 
-- `level_masks_names` - maps currently available cpu_domains onto its apic_id_mask and domain name
-  - this member is subject to removal (see issue #4)
-
 For querying, those functions are available:
 
 ```cpp
-    size_t          count()                         const noexcept
-    size_t          countLevel( cpu_domain lvl )    const noexcept
-    const cpu_id &  operator[]( size_t index )      const noexcept
-    bool		    knowsEfficiency()               const noexcept
+    size_t          count()                           const noexcept;
+    size_t          countLevel( cpu_domain lvl )      const noexcept;
+    const cpu_id &  operator[]( size_t index )        const noexcept;
+    bool            knowsEfficiency()                 const noexcept;
+    int             level_shift( cpu_domain domain )  const noexcept;
+    id_mask         level_mask( cpu_domain domain )   const noexcept;
 ```
 
 ---
@@ -70,11 +70,11 @@ For querying, those functions are available:
 
 There is not much to be said.
 
-The class does all its "heavy lifting" inside the `refresh()` function, which (re)creates the cpu_id list by switching thread affinity.
+The class does all its "heavy lifting" inside the `refresh()` function, which:
 
-After restoring the original affinity, it calls the protected member function `parse_topology`, which is modeled after [Intel®'s excellent C example](https://github.com/intel/SDM-Processor-Topology-Enumeration).
-
-This is the reason we're carrying around structures like `apicid_bit_layout` inside `cpu_id.h` - where it definitively not belongs.  See issue #7.
+- (re)creates the cpu_id list by switching thread affinity.
+- after restoring the original affinity, calls the protected member function `parse_topology`\
+  (which is modeled after [Intel®'s excellent C example](https://github.com/intel/SDM-Processor-Topology-Enumeration).)
 
 ---
 

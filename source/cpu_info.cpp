@@ -44,10 +44,10 @@ namespace cpu_info
 		const auto cnt = cpu_set::get_logical_cpu_count();
 		for ( auto n: views::iota( 0u, cnt ) )
 			cpu_set( n ).applyToCurrentThread(), cpu_ids.emplace_back();
-
-		parse_topology();
 		// reset CPU affinity to before
 		process_affinity.applyToCurrentThread();
+
+		parse_topology();
 	}
 
 	int cpu_topo::level_shift( cpu_domain d ) const noexcept
