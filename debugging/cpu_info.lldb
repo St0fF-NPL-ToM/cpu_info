@@ -1,0 +1,4 @@
+type format add --format hex cpu_info::apic_id
+type format add --format hex cpu_info::id_mask
+type summary add --summary-string "A:${var.e.ax:X08} B:${var.e.bx:X08} C:${var.e.cx:X08} D:${var.e.dx:X08}" cpu_info::cpuid_result
+type summary add --summary-string "sz:${var.sz}, set:${var.set}" cpu_info::cpu_set
