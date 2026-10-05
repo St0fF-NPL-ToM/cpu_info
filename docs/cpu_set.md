@@ -38,7 +38,7 @@ This variant of cpu sets is implemented as a header-only class, containing OS-ag
 
 After primary implementation I realized, that creating an empty set would also make a lot of sense.
 
-That way, the parameter-less default CTor started to get two different meanings. As I did not want to resolve this to a named boolean parameter with default being set to "query process", I decided to create the cookie class ```cpu_set::init_type```.
+That way, the parameter-less default CTor started to get two different meanings. As I did not want to resolve this to a named boolean parameter with default being set to "query process", I decided to create the cookie enum class `cpu_info::init_type`.
 
 This is indeed the same option drawn, but slightly more conformant to the cpp core guidelines: make things explicit.
 
@@ -74,4 +74,4 @@ All those operators are also implemented as respective modify-writes, returning 
 
 ---
 
-[→ back to overview](overview.md)
+[← back to overview](overview.md)
