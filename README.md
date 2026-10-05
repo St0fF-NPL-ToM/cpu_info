@@ -1,6 +1,6 @@
 # cpu_info
 
-A small class for gathering CPU information, that seems missing from the cpp std libs …
+A small class for gathering CPU information, that may help finding answers about multithreading …
 
 ---
 
@@ -27,7 +27,6 @@ This mini-lib is evolving, as I am working on Windows and Linux, it just takes t
 ***cpu_info:***
 
 - declares `cpu_info` namespace,
-- external interface functions,
 - and implements the cpu_topo class
 
 ***cpu_enums_intel:*** … what that name says …
@@ -44,43 +43,74 @@ This mini-lib is evolving, as I am working on Windows and Linux, it just takes t
 - is a map of "all info of a single logical core we may get"
 - contains specific query functions taylored to cpuid leafs
   - using `cpu_enums`, features, type, model, etc. can be queried
-- declares some helper structures
 
 ***cpu_set:***
 
 - for managing task cpu affinities, this class tries to abstract over the respective platform interfaces:
   - linux: scheduler-interface via `cpu_set_t`
   - windows: processthreadsapi.h, processtopologyapi.h
-- a default-constructed `cpu_info::cpu_set` object will contain a "current process' CpuSet"
-- CTor for single cpu affinity also provided
-- as well, as operators:
-  - join / intersect sets
-  - add / remove cpu-ids
+- can query the system for current process affinity (default CTor operation)
+- can be sat up empty or containing one single cpu number (Attn.: not apic_id!)
+- provides operators:
+  - join / intersect / dissect sets
+  - add / remove cpus
 - and last but not least: `applyToCurrentThread()` - which sets up the stored affinity mask for the current thread.
 
+***cpu_info_types:***
+
+- provides a few helper structs, types, and classes to ease some of the algorithms involved.
 
 ### Future
 
 Now, with `cpu_set` and the efficiency features, thinkable stuff is using the `cpu_topo` as the management basis of a more complex application thread pool …
 
+Also, the number of files steadily grew.  So another option would be to crunch it down into one header-only library.  Would make linking obsolete and ease usage even more.
+
 ---
 
 ## How to use
 
+### build system import
+
 There are probably many options how to use the code at hand. Most obvious are:
 
-- use FetchContent and link the library
-- import cpu_info's source files into your source tree (currently):
+- in a <ins>*CMake build system*:</ins> use FetchContent / FindPackage and link the library:
+  - please note how find_package arguments are passed through the `FetchContent_declare()` command …
+
+```cmake
+include(FetchContent)
+FetchContent_declare( cpu_info
+    GIT_REPOSITORY https://github.com/St0fF-NPL-ToM/cpu_info.git
+    GIT_TAG development-0.0.3                                     # please choose appropriately
+    GIT_SHALLOW on
+    FIND_PACKAGE_ARGS PATHS ~/.local/lib64/cmake                  # local linux user install paths
+                                                                  # very helpful for building locally!
+)
+FetchContent_makeAvailable( cpu_info )
+```
+
+> Note: this is only a guess, but steadily using e.g. `C:\Users\${user}\AppData\local` for your local Windows build's `CMAKE_INSTALL_PREFIX` may open up the same option on Windows systems!
+
+- in *any other buildsystem* you may want to import cpu_info's source files into your source tree (currently):
   - cpu_info.h / cpp
-  - cpu_id.h / cpp
+  - cpu_info_types.hpp
   - cpu_enums_intel.h
+  - cpu_id.h / cpp
   - cpu_set.hpp
 
-> NOTE: c++20 is required for compilation due to the use of `std::format` and `std::vformat`
+> NOTES:
+>
+> - c++20 is required for compilation
+> - nomenclature: if a cpp-header is self-contained, it shall be marked as a cpp header using ".hpp" extension\
+>   <ins>note the special case</ins> "enums_intel": it serves as a traditional Header only declaring enumerations and X-macros, which does not produce any code, yet. This cannot be self-contained, as it is "nothing".
+> - file amount / source structure may change without notice
+>
 
-> NOTE: file amount / source structure may change without notice
+---
 
-Inside your code, instantiate a `cpu_topo` object.  It will run a complete query of your CPU infrastructure upon construction:
+### code use how-to
+
+Inside your code, instantiate a `cpu_info::cpu_topo` object.  It will run a complete query of your CPU infrastructure upon construction:
 
 - query current thread's cpu capabilities to determine operation mode
 - cycle all CPUs to query their respective caps
@@ -93,13 +123,13 @@ Finally, you may use the class' members directly (it's mostly open, besides, you
 ```cpp
 	using namespace std;
 	cpu_info::cpu_topo info;
-	cout << "logical:  " << info.countLevel( cpu_domain::LogicalDomain ) << ",\n"
-	     << "physical: " << info.countLevel( cpu_domain::CoreDomain ) << ",\n"
-	     << "modules:  " << info.countLevel( cpu_domain::ModuleDomain ) << endl;
-	int tpl{8};
+	cout << format( "logical:  {:2d}\nphysical: {:2d}\nmodules:  {:2d}\n",
+							info.countLevel( cpu_domain::LogicalDomain ),
+							info.countLevel( cpu_domain::CoreDomain ),
+							info.countLevel( cpu_domain::ModuleDomain ) );
+	int i{};
 	for (auto &id : info.cpu_ids)
-		cout << ( string ) id << (--tpl ? ", " : (tpl = 8, "\n"));
-	cout << endl;
+		cout << format( "{:02d}: {:#06X}: '{:s}'\n", i++, (apic_id) id, id.brand_string() );
 ```
 
 ---
@@ -108,7 +138,3 @@ Finally, you may use the class' members directly (it's mostly open, besides, you
 
 Please activate `cpu_info_example` in your CMake Cache after cloning the source repository.
 A simple example command line tool running on linux and Windows is included.
-
-Tested on:
-- Windows 11 Home
-- Fedora Linux 44

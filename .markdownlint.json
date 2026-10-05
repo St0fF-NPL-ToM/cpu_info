@@ -81,7 +81,7 @@
   },
   "MD032": true,
   "MD033": {
-    "allowed_elements": [],
+    "allowed_elements": ["ins"],
     "table_allowed_elements": ["br"]
   },
   "MD034": true,
