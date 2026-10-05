@@ -57,11 +57,16 @@ For querying, those functions are available:
 
 ```cpp
     size_t          count()                           const noexcept;
-    size_t          countLevel( cpu_domain lvl )      const noexcept;
+    cpu_domain      max_domain()                      const noexcept;
+    size_t          count_domain( cpu_domain lvl )    const noexcept;
     const cpu_id &  operator[]( size_t index )        const noexcept;
-    bool            knowsEfficiency()                 const noexcept;
-    int             level_shift( cpu_domain domain )  const noexcept;
-    id_mask         level_mask( cpu_domain domain )   const noexcept;
+    bool            knows_efficiency()                const noexcept;
+```
+
+In case your system supports cpu hot plugging, you may want to listen to the respective events and in turn call:
+
+```cpp
+    void            refresh()                         noexcept;
 ```
 
 ---
