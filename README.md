@@ -24,6 +24,8 @@ This mini-lib is evolving, as I am working on Windows and Linux, it just takes t
 
 ### Current state
 
+Please also have a look at the [docs folder](docs/overview.md).
+
 ***cpu_info:***
 
 - declares `cpu_info` namespace,
@@ -131,6 +133,8 @@ Finally, you may use the class' members directly (it's mostly open, besides, you
 	for (auto &id : info.cpu_ids)
 		cout << format( "{:02d}: {:#06X}: '{:s}'\n", i++, (apic_id) id, id.brand_string() );
 ```
+
+For further information, please consult the code itself and the [docs folder](docs/overview.md).
 
 ---
 
