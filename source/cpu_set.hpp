@@ -28,10 +28,11 @@
 
 namespace cpu_info
 {
+	enum class init_type { process, empty };
+
 	class cpu_set final
 	{
 	  public:
-		enum class init_type { process, empty };
 		// Query system CPU count, but only depending on the currently assigned group
 		// (in case we're running on a very phat system …)
 		/*  static unsigned get_logical_cpu_count() noexcept; */
