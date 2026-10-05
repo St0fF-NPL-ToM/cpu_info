@@ -83,4 +83,4 @@ The class does all its "heavy lifting" inside the `refresh()` function, which:
 
 ---
 
-[→ back to overview](overview.md)
+[← back to overview](overview.md)

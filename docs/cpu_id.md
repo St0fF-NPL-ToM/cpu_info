@@ -205,4 +205,4 @@ Regarding the future:
 
 ---
 
-[→ back to overview](overview.md)
+[← back to overview](overview.md)
