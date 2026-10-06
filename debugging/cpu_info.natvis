@@ -9,25 +9,28 @@
 		<DisplayString>{domain} → {shift,d}, {relative_masks}</DisplayString>
 	</Type>
 
-	<!-- This is a "Trick17": to account for different platform implementations, the Type is
-		 declared, twice. Once for each platform.  The "wrong" platform won't get accepted by
-		 the debugger, but the "right" one will ... -->
 	<Type Name="cpu_info::cpu_set">
-		<DisplayString>{ga.Group,d}:{ga.Mask,X},{sysAffinity,X}</DisplayString>
-	</Type>
-	<Type Name="cpu_info::cpu_set">
-		<DisplayString>{sz,d}:{set,x}</DisplayString>
+		<!-- ATTN: this class uses "#include <natvis.h>" to create a const "msvc" member -->
+		<DisplayString Condition="(msvc == true)" Optional="true">{ga.Group,d}:{ga.Mask,x},{sysAffinity,x}</DisplayString>
+		<DisplayString Optional="true">{sz,d}:{set,x}</DisplayString>
 	</Type>
 
 	<Type Name="cpu_info::cpu_topo">
-		<DisplayString>CPUs:{cpu_ids.size()} Domains:{lvl_ids.size()}</DisplayString>
+		<Intrinsic Name="msvc" Expression="(void)(process_affinity.sysAffinity), true" Optional="false"/>
+		<DisplayString Condition="msvc() &amp;&amp; (process_affinity.ga.Mask == process_affinity.sysAffinity)"
+					   Optional="true">CPUs:{cpu_ids.size()} Domains:{lvl_ids.size()} Mask:'ALL'</DisplayString>
+		<DisplayString Condition="msvc() &amp;&amp; (process_affinity.ga.Mask == 0)"
+					   Optional="true">CPUs:{cpu_ids.size()} Domains:{lvl_ids.size()} Mask:'NONE'</DisplayString>
+		<DisplayString>CPUs:{cpu_ids.size(),d} Domains:{lvl_ids.size(),d} linux</DisplayString>
 	</Type>
 
-	<!--Type Name="cpu_info::cpu_id" ExcludeView="ShowElementsByIndex" Priority="MediumHigh">
-		<DisplayString>{{ size={_Mypair._Myval2._Myval2._Mysize} }}</DisplayString>
+	<Type Name="cpu_info::cpu_id" ExcludeView="ShowElementsByIndex" Priority="MediumHigh">
+		<Intrinsic Name="maxLeaf" Expression="(uint16_t)(_Mypair._Myval2._Myval2._Myhead->_Left->_Myval.second._Mypair._Myval2._Myfirst->e.ax)" Optional="true"/>
+		<Intrinsic Name="idLeaf" Expression="(unsigned)(maxLeaf() &lt; 0x1f ? maxLeaf() &lt; 0x0b ? 1 : 0x0b : 0x1f)" Optional="true"/>
+		<!-- the following is incorrect in case of larger systems - it simply works with most consumer CPUs -->
+		<Intrinsic Name="apicId" Expression="(uint16_t)(_Mypair._Myval2._Myval2._Myhead->_Left->_Parent->_Myval.second[0].e.bx >> 24)" Optional="true"/>
+		<DisplayString Optional="true">cpu: #{apicId(),X}  maxLeaf:{maxLeaf(),X}, {_Mypair._Myval2._Myval2._Mysize} leafs</DisplayString>
 		<Expand>
-			<Item Name="[comparator]" ExcludeView="simple">_Mypair</Item>
-			<Item Name="[allocator]" ExcludeView="simple">_Mypair._Myval2</Item>
 			<TreeItems>
 				<Size>_Mypair._Myval2._Myval2._Mysize</Size>
 				<HeadPointer>_Mypair._Myval2._Myval2._Myhead-&gt;_Parent</HeadPointer>
@@ -38,8 +41,15 @@
 		</Expand>
 	</Type>
 
-	<Type Name="std::pair&lt;*, *&gt;" IncludeView="MapHelper">
-		<DisplayString>{second.size()}</DisplayString>
+	<Type Name="std::pair&lt;unsigned int const ,std::vector&lt;cpu_info::cpuid_result, *&gt;&gt;" IncludeView="MapHelper">
+		<DisplayString Condition="(second.size() == 1)">{second[0]}</DisplayString>
+		<DisplayString>{second.size()} subleafs</DisplayString>
+		<Expand><!-- HideRawView="true"-->
+			<ArrayItems>
+				<Size>second.size()</Size>
+				<ValuePointer>second._Mypair._Myval2._Myfirst</ValuePointer>
+			</ArrayItems>
+		</Expand>
 	</Type>
 
 	<Type Name="std::_Tree_iterator&lt;*&gt;">
@@ -50,12 +60,13 @@
 		<Expand>
 			<Item Condition="_Ptr-&gt;_Isnil == 0" Name="[ptr]">&amp;_Ptr-&gt;_Myval</Item>
 		</Expand>
-	</Type-->
+	</Type>
 
-	<!--Type Name="std::vector&lt;*&gt;">
+	<Type Name="std::vector&lt;cpu_info::cpuid_result,*&gt;">
 		<Intrinsic Name="size" Expression="(size_t)(_Mypair._Myval2._Mylast - _Mypair._Myval2._Myfirst)" />
 		<Intrinsic Name="capacity" Expression="(size_t)(_Mypair._Myval2._Myend - _Mypair._Myval2._Myfirst)" />
-		<DisplayString>{{ size={size()} }}</DisplayString>
+		<DisplayString Condition="(size() == 1)">{*_Mypair._Myval2._Myfirst}</DisplayString>
+		<DisplayString>cpuids: {size()}</DisplayString>
 		<Expand>
 			<Item Name="[capacity]" ExcludeView="simple">capacity()</Item>
 			<Item Name="[allocator]" ExcludeView="simple">_Mypair</Item>
@@ -64,5 +75,6 @@
 				<ValuePointer>_Mypair._Myval2._Myfirst</ValuePointer>
 			</ArrayItems>
 		</Expand>
-	</Type-->
+	</Type>
+
 </AutoVisualizer>
