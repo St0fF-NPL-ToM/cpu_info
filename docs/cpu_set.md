@@ -68,7 +68,7 @@ The class implements all operators that make some kind of sense:
 - `operator&( const cpu_set& )` - intersect two sets
 - `operator^( const cpu_set& )` - disjoin two sets (keep only non-shared items)
 
-All those operators are also implemented as respective modify-writes, returning a self-reference for chaining modifications together.
+All those operators are also implemented as respective modify-writes (in-place operators), returning a self-reference for chaining modifications together.
 
 > ::Note:: Take care when setting parenthesis …
 
