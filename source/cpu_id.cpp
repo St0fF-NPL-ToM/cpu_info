@@ -331,8 +331,10 @@ namespace cpu_info
 	cpu_efficiency cpu_id::efficiency() const noexcept
 	{
 		if ( max_leaf() >= 0x1a )
-			return ( ( at( 0x1a )[ 0 ].e.ax & 0x70000000u ) > 0x20000000u ? performant
-																		  : effficient );
+			return ( *this )( cpu_feature::HYBRID )
+					   ? ( ( at( 0x1a )[ 0 ].e.ax & 0x70000000u ) > 0x20000000u ? performant
+																				: effficient )
+					   : unknownEff;
 		else return unknownEff;
 	}
 
