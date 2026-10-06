@@ -32,6 +32,7 @@ namespace cpu_info
 
 	class cpu_set final
 	{
+		#include <natvis.h>
 	  public:
 		// Query system CPU count, but only depending on the currently assigned group
 		// (in case we're running on a very phat system …)

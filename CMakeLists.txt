@@ -15,7 +15,6 @@ add_subdirectory( debugging )
 
 set( DOCS README.md LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md )
 target_sources( cpu_info PRIVATE ${DOCS} )
-source_group( DOCS FILES ${DOCS} )
 
 add_library( cpu_info::cpu_info ALIAS cpu_info )
 target_include_directories( cpu_info PUBLIC

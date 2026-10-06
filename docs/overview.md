@@ -53,3 +53,14 @@ We have a few [`cpu_enumerations`](enumerations.md) for behavioural control, as 
 | `cpu_efficiency` | EFFICIENCY_TYPE | NAME, VALUE | Translation of `cpu_core_type` into its actual meaning |
 | `cpu_processor_type` | PROCESSOR_TYPE | NAME | not really of importance anymore, a relatively old cpuid-bitmask containing `OEM_processor`, `IntelOverDrive`, `Dual_processor`, … |
 | `cpu_set::init_type` | none defined | … | Cookie-type to control parameter-less cpu_set constructor behaviour. |
+
+---
+
+### [Debugging helpers](debugging.md)
+
+Well, have a look there. Helpers are provided as:
+
+- natvis
+- lldb script
+
+---
