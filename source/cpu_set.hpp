@@ -24,7 +24,6 @@
 	#include <unistd.h>
 	#include <sys/sysinfo.h>
 	#include <utility>
-	#include <ranges>
 #endif
 
 namespace cpu_info
@@ -97,17 +96,11 @@ namespace cpu_info
 		{ CPU_SET_S( logical_cpu, sz, set ); }
 
 		cpu_set( const cpu_set& o )
-			: sz( CPU_COUNT( o.set ) )
+			: sz( o.sz )
 			, set( CPU_ALLOC( sz ) )
 		{
 			CPU_ZERO_S( sz, set );
 			CPU_OR_S( sz, set, set, o.set );
-		}
-		cpu_set& operator=( const cpu_set& o )
-		{
-			CPU_ZERO_S( sz, set );
-			CPU_OR_S( sz, set, set, o.set );
-			return *this;
 		}
 		~cpu_set() noexcept
 		{
