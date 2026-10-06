@@ -1,39 +1,47 @@
----
-references:
-  - "File: /cpu_enums.h"
-  - "File: /cpu_id.h"
-  - "File: /cpu_info.h"
-  - "File: /cpu_set.h"
-generationTime: 2026-09-30T19:21:25.654Z
----
 classDiagram
-    class cpuid_result {
-        +unsigned int r
-        +unsigned int ax
-        +unsigned int bx
-        +unsigned int cx
-        +unsigned int dx
+    class cpu_topo {
+        +cpu_set process_affinity
+        +Vector~cpu_id~ cpu_ids
+        +Vector~ApicIdCountMap~ lvl_ids
+        +count() size_t
+        +max_domain() cpu_domain
+        +count_domain(cpu_domain lvl) size_t
+        +parse_topology() void
+        +refresh() void
     }
 
     class cpu_id {
-        #retrieve(unsigned leaf) List~cpuid_result~
-        +operator[](unsigned leaf) List~cpuid_result~
+        +cpuid(leaf, subleaf) cpuid_result
         +max_leaf() unsigned
-        +operator bool() bool
-        +operator apic_id() apic_id
-        +operator string() string
-        +operator()(cpu_feature feature) bool
-        +stepping() uint8_t
-        +family() uint8_t
-        +model() uint8_t
-        +type() cpu_processor_type
-        +coreType() cpu_core_type
-        +coreModel() unsigned
+        +id_leaf() unsigned
+        +masked_id(domain) apic_id
+        +operator()(feature) bool
         +brand_string() string
         +efficiency() cpu_efficiency
+        #retrieve(leaf) CpuidResultList
     }
 
-    class mask_map {
+    class cpu_set {
+        -int sz
+        -cpu_set_t set
+        -GROUP_AFFINITY ga
+        -DWORD_PTR sysAffinity
+        +get_logical_cpu_count() unsigned
+        +applyToCurrentThread() bool
+        +query() bool
+        +apply() bool
+        +operator|(cpu_set) cpu_set
+        +operator&(cpu_set) cpu_set
+        +operator+=(cpu_id) cpu_set
+    }
+
+    class cpuid_result {
+        <<union>>
+        +unsigned r
+        +unsigned ax
+        +unsigned bx
+        +unsigned cx
+        +unsigned dx
     }
 
     class apicid_bit_layout {
@@ -45,26 +53,18 @@ classDiagram
     class apicid_bit_layouts {
         +cpu_domain top_domain
         +domains() unsigned
-        +operator[](size_t index) apicid_bit_layout
     }
 
-    class cpu_topo {
-        +cpu_set process_affinity
-        +List~cpu_id~ cpu_ids
-        +List~Map~ lvl_ids
-        +countLevel(cpu_domain lvl) int
-        +id(size_t index) cpu_id
-        #parse_topology() void
+    class mask_map {
+        +operator[](key) id_mask
     }
 
-    class cpu_set {
-        +get_logical_cpu_count() unsigned
-        +applyToCurrentThread() bool
-        +operator|(cpu_set other) cpu_set
-        +operator&(cpu_set other) cpu_set
-        +operator^(cpu_set other) cpu_set
-        #query() bool
-        #apply() bool
+    class Map {
+        <<external STL base>>
+    }
+
+    class Vector {
+        <<external STL base>>
     }
 
     class cpu_feature {
@@ -72,6 +72,7 @@ classDiagram
         SSE3
         AVX
         AVX2
+        AVX512F
         AMX_TILE
     }
 
@@ -80,7 +81,10 @@ classDiagram
         InvalidDomain
         LogicalDomain
         CoreDomain
+        ModuleDomain
+        TileDomain
         DieDomain
+        DieGrpDomain
     }
 
     class cpu_processor_type {
@@ -94,7 +98,9 @@ classDiagram
     class cpu_core_type {
         <<enumeration>>
         DUNNO
+        RESRV
         AtomR
+        R3SRV
         CoreI
     }
 
@@ -105,15 +111,32 @@ classDiagram
         performant
     }
 
-    cpu_topo "1" *-- "0..*" cpu_id : cpu_ids
+    class init_type {
+        <<enumeration>>
+        process
+        empty
+    }
+
+    class ApicIdCountMap {
+        <<container type>>
+    }
+
+    class CpuidResultList {
+        <<container type>>
+    }
+
+    Map <|-- cpu_id
+    Map <|-- mask_map
+    Vector <|-- apicid_bit_layouts
     cpu_topo "1" *-- "1" cpu_set : process affinity
-    cpu_topo "1" *-- "1" apicid_bit_layouts : abl
-    apicid_bit_layouts "1" *-- "0..*" apicid_bit_layout : contains
-    apicid_bit_layout "1" *-- "1" mask_map : relative masks
-    cpu_id "1" o-- "0..*" cpuid_result : stores
-    cpu_id ..> cpu_feature : checks
-    cpu_id ..> cpu_processor_type : returns
-    cpu_id ..> cpu_core_type : returns
-    cpu_id ..> cpu_efficiency : returns
-    apicid_bit_layout ..> cpu_domain : identifies
-    cpu_topo ..> cpu_domain : counts
+    cpu_topo "1" *-- "0..*" cpu_id : CPU records
+    cpu_topo --> ApicIdCountMap : lvl_ids
+    apicid_bit_layout *-- mask_map : relative masks
+    cpu_id --> CpuidResultList : leaf results
+    cpu_id --> cpuid_result : CPUID data
+    cpu_topo --> cpu_domain
+    cpu_id --> cpu_feature
+    cpu_id --> cpu_efficiency
+    cpu_id --> cpu_processor_type
+    cpu_id --> cpu_core_type
+    cpu_set --> init_type
