@@ -22,6 +22,10 @@ I am aware, that this was a *wheel reinvention* in some way.  Windows and Linux 
 
 The `cpu_info` namespace enrolls the library.  Every piece is contained within the namespace.
 
+See the class diagram for a cleaner picture of the components and how they stick together:
+
+<!-- @import "cpu_info.mmd" {as="mermaid"} -->
+
 ---
 
 ### Classes
