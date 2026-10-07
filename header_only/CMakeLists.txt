@@ -15,7 +15,7 @@ set_target_properties( header_only PROPERTIES
 )
 target_include_directories( header_only INTERFACE
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
-    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/cpu_info_header_only>"
 )
 add_library( cpu_info::header_only ALIAS header_only )
-install( FILES cpu_info.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} )
+install( FILES cpu_info.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cpu_info_header_only )
