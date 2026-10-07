@@ -45,7 +45,7 @@ namespace cpu_info
 	constexpr unsigned MAXIMUM_DOMAINS = 32;
 	constexpr unsigned MAX_PROCESSORS  = 1024; // not sure if this is necessary!
 	// clang-format off
-	/** 
+	/**
 	* 	enumeration of Intel-defined cpu capability flags userspace might want to test.
 	*
 	* 	to provide a clean nomenclature, let's assume some factors:
@@ -576,7 +576,7 @@ namespace cpu_info
 			// i fear the linux cpu_set just has one group?
 			return result;
 		}
-		void apply() noexcept
+		bool apply() noexcept
 		{
 			int	  sz{ count() }, i{};
 			auto *s = CPU_ALLOC( sz );
