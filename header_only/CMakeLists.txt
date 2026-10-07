@@ -9,19 +9,13 @@ cmake_minimum_required( VERSION 4.2 )
     - set up how to install
 ]]
 add_library( header_only INTERFACE cpu_info.hpp )
-set_target_properties( header_only PROPERTIES LINKER_LANGUAGE CXX INTERFACE_COMPILE_FEATURES cxx_std_23 )
-add_library( cpu_info::header_only ALIAS header_only )
-
-install( FILES cpu_info.hpp DESTINATION include )
-install( TARGETS header_only EXPORT header_onlyTargets
-	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-	INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} )
-install( EXPORT header_onlyTargets FILE header_onlyTargets.cmake NAMESPACE cpu_info::
-	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cpu_info )
-# Buildtree-Export
-export( EXPORT header_onlyTargets
-	FILE ${CMAKE_CURRENT_BINARY_DIR}/cmake/header_onlyTargets.cmake
-	NAMESPACE cpu_info::
+set_target_properties( header_only PROPERTIES
+    LINKER_LANGUAGE CXX
+    INTERFACE_COMPILE_FEATURES cxx_std_23
 )
+target_include_directories( header_only INTERFACE
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+)
+add_library( cpu_info::header_only ALIAS header_only )
+install( FILES cpu_info.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} )

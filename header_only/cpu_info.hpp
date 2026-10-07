@@ -34,7 +34,7 @@
 namespace cpu_info
 {
 
-#pragma region INTEL® keywords, flags and respective enumerations
+#pragma region INTEL keywords, flags and respective enumerations
 	/*
 	 *	The maximum number of enumerated domains, since X2APIC is 32 bits
 	 *	there really can't be more than 32 domains enumerated.

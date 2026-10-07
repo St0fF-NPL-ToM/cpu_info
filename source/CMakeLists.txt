@@ -15,19 +15,7 @@ target_include_directories( cpu_info PUBLIC
 )
 add_library( cpu_info::cpu_info ALIAS cpu_info )
 
-install( FILES ${HEADERS} DESTINATION include )
-install( TARGETS cpu_info EXPORT cpu_infoTargets
-	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-	INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} )
-install( EXPORT cpu_infoTargets FILE cpu_infoTargets.cmake NAMESPACE cpu_info::
-	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cpu_info )
-# Buildtree-Export
-export( EXPORT cpu_infoTargets
-	FILE ${CMAKE_CURRENT_BINARY_DIR}/cmake/cpu_infoTargets.cmake
-	NAMESPACE cpu_info::
-)
+install( FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} )
 
 source_group( HDRS FILES ${HEADERS} )
 source_group( SRCS FILES ${SOURCES} )
