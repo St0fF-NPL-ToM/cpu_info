@@ -30,6 +30,8 @@
 #include <cstdint>
 #include <string>
 #include <ranges>
+#include <vector>
+#include <functional>
 
 namespace cpu_info
 {
@@ -417,23 +419,57 @@ namespace cpu_info
 	 *	Basic idea: instantiate such an iterator.
 	 *	- make it iterate thru all accessible CPUs (option 1)
 	 *	- make it point to a specific CPU (option 2)
+	 *
+	 *	Problem of that "basic idea": IT HIDES VERY USEFUL CODE!
 	 */
-	class affinity_iterator final
+	class affinity final
 	{
+		// Process/Thread affinity has:
+		// - an affinity bit mask
+		// - a group id (or omits it)
+		// - maybe a preferred cpu number (in case the system supports this setting)
+		std::vector< bool > bit_mask;
+		unsigned			group_id{ std::numeric_limits< unsigned >::max() };
+		unsigned			pref_cpu{ std::numeric_limits< unsigned >::max() };
+
 	  public:
-		affinity_iterator() { query(), apply(); }
-		~affinity_iterator() { reset(); }
-						   operator bool() noexcept { return index >= 0 && index < count(); }
-		affinity_iterator &operator++() noexcept { return ++index, apply(); }
-		affinity_iterator &operator--() noexcept { return --index, apply(); }
-		bool			   set_to( int cpu_index ) noexcept
-		{ return cpu_index >= count() ? false : ( index = cpu_index, apply(), true ); }
-		// some platform specifics to follow.
+		affinity() = default; // create empty
+		affinity( int n )	  // create with one cpu-number selected
+			: bit_mask( n, false )
+		{ bit_mask.push_back( true ); }
+
+		// check if all is empty / any bits are set
+		operator bool() const noexcept
+		{
+			for ( auto b: bit_mask )
+				if ( b ) return true;
+			return false;
+		}
+		bool	  empty() const noexcept { return !( *this ); }
+		// so it can be directly used after reading …
+		affinity &read_current() noexcept { return query(), *this; }
+		// set current thread affinity! USE WITH CARE!
+		void	  set_to_current() noexcept { apply(); }
+		void	  apply_next() noexcept { bit_mask.insert( bit_mask.begin(), false ), apply(); }
+
+		affinity // operate on two sets producing another one.
+		op( const affinity &o, std::function< bool( bool, bool ) > operation ) const noexcept
+		{
+			affinity   res( *this );
+			const auto sm{ bit_mask.size() }, so{ o.bit_mask.size() }, sz{ std::max( sm, so ) };
+			res.bit_mask.resize( sz );
+			for ( auto i: std::views::iota( 0ul, bit_mask.size() ) )
+				res.bit_mask[ i ] = operation( ( i >= sm ? false : bit_mask[ i ] ),
+											   ( i >= so ? false : o.bit_mask[ i ] ) );
+			return res;
+		} // clang-format off
+		affinity operator|( const affinity &o ) const noexcept { return op( o, []( bool r, bool l ) { return ( r || l ); } ); }
+		affinity operator&( const affinity &o ) const noexcept { return op( o, []( bool r, bool l ) { return ( r && l ); } ); }
+		affinity operator^( const affinity &o ) const noexcept { return op( o, []( bool r, bool l ) { return ( r ^ l ); } ); }
+		// clang-format on
 	  private:
-		int index{};
 #ifdef _WIN32
-		GROUP_AFFINITY ga{ .Group = ALL_PROCESSOR_GROUPS };
-		void		   query() noexcept
+		void query() noexcept
 		{
 			/*	Multiple ways lead to Rome … we need: a cpu-group id AND an affinity mask
 			 *	→ easiest solution:
@@ -441,40 +477,61 @@ namespace cpu_info
 			 *		- GetProcessAffinityMask:		process affinity and system affinity
 			 *		(logically, these affinities cover the previously acquired group id)
 			 */
-			HANDLE			 prc{ GetCurrentProcess() };
 			PROCESSOR_NUMBER pn{};
+			KAFFINITY		 pm{};
 			GetCurrentProcessorNumberEx( &pn );
-			ga.Group = pn.Group;
-			index	 = pn.Number;
-			return GetProcessAffinityMask( prc, &ga.Mask, nullptr );
+			GetProcessAffinityMask( GetCurrentProcess(), &pm, nullptr );
+			group_id = pn.Group;
+			pref_cpu = pn.Number;
+			bit_mask.clear();
+			while ( pm ) bit_mask.push_back( pm & 1 ), pm >>= 1;
 		}
-		void reset() noexcept { SetThreadGroupAffinity( GetCurrentThread(), &ga, nullptr ); }
-		affinity_iterator &apply() noexcept
+		bool apply() noexcept
 		{
-			GROUP_AFFINITY cga{ ga };
-			cga.Mask = ( KAFFINITY ) ( 1 << index );
-			SetThreadGroupAffinity( GetCurrentThread(), &cga, nullptr );
+			GROUP_AFFINITY ga{};
+			ga.Group = group_id;
+			for ( auto b: std::views::reverse( bit_mask ) )
+				ga.Mask = ( KAFFINITY ) ( b | ( ga.Mask << 1 ) );
+			SetThreadGroupAffinity( GetCurrentThread(), &ga, nullptr );
+			if ( pref_cpu >= 0 ) SetThreadIdealProcessor( GetCurrentThread(), ( DWORD ) pref_cpu );
 		}
 #elifdef linux
-		int		   sz{ count() };
-		cpu_set_t *set{ CPU_ALLOC( count() ) };
-
-		void	   query() noexcept { sched_getaffinity( getpid(), sz, set ); }
-		void	   reset() noexcept
+		void query() noexcept
 		{
-			sched_setaffinity( getpid(), sz, set );
-			CPU_FREE( set ), set = nullptr;
+			int		   sz{ count() };
+			cpu_set_t *set{ CPU_ALLOC( sz ) };
+			sched_getaffinity( getpid(), sz, set );
+			bit_mask.clear();
+			for ( int n: std::views::iota( 0, sz ) )
+				bit_mask.push_back( CPU_ISSET_S( n, sz, set ) );
+			CPU_FREE( set );
+			// i fear the linux cpu_set just has one group?
 		}
-		affinity_iterator &apply() noexcept
+		void apply() noexcept
 		{
+			int	  sz{ count() }, i{};
 			auto *s = CPU_ALLOC( sz );
 			CPU_ZERO_S( sz, s );
-			CPU_SET_S( index, sz, s );
+			for ( auto b: bit_mask )
+				if ( b ) CPU_SET_S( i++, sz, s );
+				else CPU_CLR_S( i++, sz, s );
 			sched_setaffinity( getpid(), sz, s );
 			CPU_FREE( s );
-			return *this;
 		}
 #endif
+	};
+
+	class affinity_iterator final
+	{
+		affinity base, curr;
+
+	  public:
+		affinity_iterator()
+			: curr( 0 )
+		{ base.read_current(), curr.set_to_current(); }
+		~affinity_iterator() { base.set_to_current(); }
+						   operator bool() noexcept { return ( base & curr ); }
+		affinity_iterator &operator++() noexcept { return curr.apply_next(), *this; }
 	};
 
 #pragma endregion
