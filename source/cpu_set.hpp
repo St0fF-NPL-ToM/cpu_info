@@ -24,6 +24,7 @@
 	#include <unistd.h>
 	#include <sys/sysinfo.h>
 	#include <utility>
+	#include <ranges>
 #endif
 
 namespace cpu_info
