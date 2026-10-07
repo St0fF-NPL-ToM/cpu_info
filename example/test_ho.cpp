@@ -9,11 +9,13 @@ using namespace cpu_info;
 #define X( name, val ) #name,
 constexpr const char *effistr[] = { EFFICIENCY_TYPE( X ) };
 #undef X
+
 int main( int argc, char *argv[] )
 {
 	std::cout << brand_string() << std::endl
-			  << std::format( "family: {:02x}, model: {:02x}, stepping: {:#04x}\n", family(),
-							  model(), stepping() );
+			  << std::format(
+					 "- Family: {:#04x}, Model: {:#04x}, Stepping: {:#04x}\n- Logical cores : {:d}\n",
+					 family(), model(), stepping(), cpu_info::count() );
 	affinity			effi, perf;
 	int					cpu{};
 	std::set< APIC_id > coreIds;
@@ -30,13 +32,12 @@ int main( int argc, char *argv[] )
 			case cpu_efficiency::performant: perf += cpu; break;
 			default: break;
 		}
-		std::cout << std::format( "Core #{:3d}: APIC_ID = {:#04x}, Efficiency: {:s}", cpu,
+		std::cout << std::format( "- Core #{:3d}: APIC_ID = {:#04x}, Efficiency: {:s}", cpu,
 								  apic_id(), effistr[ eff ] )
 				  << std::endl;
 	} while ( ( ++cpu, ++myAffinity ) ); // should reset affinity at the end …
 	// output fresh knowledge
-	std::cout << std::format( "- Logical cores : {:d}\n- Physical cores: {:d}\n", cpu_info::count(),
-							  coreIds.size() );
+	std::cout << std::format( "- Physical cores: {:d}\n", coreIds.size() );
 	if ( !effi.empty() )
 	{
 		std::cout << "- Performance core mask: " << perf.to_string() << std::endl;
