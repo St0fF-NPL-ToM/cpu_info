@@ -2,7 +2,6 @@
 #include <iostream>
 #include <format>
 #include <set>
-#include <string>
 #include <cpu_info.hpp>
 
 using namespace cpu_info;
@@ -13,7 +12,7 @@ constexpr const char *effistr[] = { EFFICIENCY_TYPE( X ) };
 int main( int argc, char *argv[] )
 {
 	std::cout << brand_string() << std::endl
-			  << std::format( "family: {:02X}, model: {:02X}, stepping: {:#04X}\n", family(),
+			  << std::format( "family: {:02x}, model: {:02x}, stepping: {:#04x}\n", family(),
 							  model(), stepping() );
 	affinity			effi, perf;
 	int					cpu{};
@@ -31,7 +30,7 @@ int main( int argc, char *argv[] )
 			case cpu_efficiency::performant: perf += cpu; break;
 			default: break;
 		}
-		std::cout << std::format( "Core #{:3d}: APIC_ID = {:#04X}, Efficiency: {:s}", cpu,
+		std::cout << std::format( "Core #{:3d}: APIC_ID = {:#04x}, Efficiency: {:s}", cpu,
 								  apic_id(), effistr[ eff ] )
 				  << std::endl;
 	} while ( ( ++cpu, ++myAffinity ) ); // should reset affinity at the end …
