@@ -20,6 +20,7 @@
  *	Thus, one could implement a kind of "iterator" …
  */
 #ifdef _WIN32
+	#define NOMINMAX
 	#include <Windows.h>
 #elifdef linux
 	#include <sys/sysinfo.h>
