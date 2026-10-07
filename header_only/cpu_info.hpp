@@ -44,18 +44,18 @@ namespace cpu_info
 	 */
 	constexpr unsigned MAXIMUM_DOMAINS = 32;
 	constexpr unsigned MAX_PROCESSORS  = 1024; // not sure if this is necessary!
-											   /**
-												* 	enumeration of Intel-defined cpu capability flags userspace might want to test.
-												*
-												* 	to provide a clean nomenclature, let's assume some factors:
-												*	- LEAF: (feat >> 8) & 0xff
-												*	- SUB:	(feat >> 16) & 0xff
-												*	- REG:	(feat >> 5) & 0x03
-												*	- BIT:	(feat >> 0) & 0x1f
-												*
-												*	This makes up for an X-Macro-List ( NAME, REG, BIT, LEAF, SUB )
-												*/
 	// clang-format off
+	/** 
+	* 	enumeration of Intel-defined cpu capability flags userspace might want to test.
+	*
+	* 	to provide a clean nomenclature, let's assume some factors:
+	*	- LEAF: (feat >> 8) & 0xff
+	*	- SUB:	(feat >> 16) & 0xff
+	*	- REG:	(feat >> 5) & 0x03
+	*	- BIT:	(feat >> 0) & 0x1f
+	*
+	*	This makes up for an X-Macro-List ( NAME, REG, BIT, LEAF, SUB )
+	*/
 	#define CPU_FEATURES( X ) \
 		X( SSE3, 2, 0, 1, 0 )				X( PCLMULQDQ, 2, 1, 1, 0 )	X( DTES64, 2, 2, 1, 0 )\
 		X( MONITOR, 2, 3, 1, 0 )			X( DS_CPL, 2, 4, 1, 0 )		X( VMX, 2, 5, 1, 0 )\
@@ -167,14 +167,12 @@ namespace cpu_info
 	#define CORE_TYPE( X ) X( DUNNO, 0 ) X( RESRV, 0x10 ) X( AtomR, 0x20 ) X( R3SRV, 0x30 ) X( CoreI, 0x40 )
 	#define X( name, n ) name = n,
 	enum cpu_core_type { CORE_TYPE( X ) };
-	#undef X
 	/*
 	 *	Regarding this field … there are performance- and efficiency-cores on some platforms.
 	 *	I could not find out, what they really use (except for ARM littleBIG) and obviously
 	 *	core_type::Atom vs. core_type::Core.
 	 */
 	#define EFFICIENCY_TYPE( X ) X( unknownEff, 0 ) X( effficient, 1 ) X( performant, 2 )
-	#define X( name, n ) name = n,
 	enum cpu_efficiency { EFFICIENCY_TYPE( X ) };
 	#undef X
 	// clang-format on
@@ -245,6 +243,7 @@ namespace cpu_info
 #pragma endregion
 
 #pragma region QUERY functions accessing current cpu
+
 	inline unsigned id_leaf() noexcept // query the ID-leaf
 	{
 		const auto ml = cpuid( 0, 0 );
@@ -303,6 +302,7 @@ namespace cpu_info
 			return sl.e.ax & 0x1F; // Fallback: top level shift propagates further …
 		}
 	}
+
 	inline id_mask domain_mask( cpu_domain domain ) noexcept // query domain mask
 	{
 		if ( domain <= cpu_domain::LogicalDomain ) return -1u;
@@ -313,24 +313,28 @@ namespace cpu_info
 		const auto ds = domain_shift( domain );
 		return ( ( 1 << ds ) - 1 ) ^ ( ( 1 << ps ) - 1 );
 	}
-	inline APIC_id apic_id( cpu_domain domain ) noexcept // produce apic_id
+
+	inline APIC_id // produce apic_id - default logical domain is complete and unmasked!
+	apic_id( cpu_domain domain = cpu_domain::LogicalDomain ) noexcept
 	{
 		const auto sl = id_leaf(); // retrieve APIC_ID
 		const auto id = ( sl > 1 ) ? cpuid( sl, 0 ).e.dx
 						: sl	   ? cpuid( 1, 0 ).e.bx >> 24
 								   : -1u; // illegal!
 										  // produce masked and shifted value
-		return ( id & domain_mask( domain ) ) >> domain_shift( domain );
+		return ( id & domain_mask( domain ) ) >> domain_shift( cpu_domain( domain - 1 ) );
 	}
 
 	inline uint8_t stepping() noexcept
 	{ return cpuid( 1, 0 ).e.ax & 0b1111; }
+
 	inline uint8_t family() noexcept
 	{
 		const auto l = cpuid( 1, 0 );
 		const auto fid{ uint8_t( l.e.ax >> 8 ) & 0b1111 };
 		return ( fid != 0x0f ? fid : fid + ( ( l.e.ax >> 20 ) & 0xff ) );
 	}
+
 	inline uint8_t model() noexcept
 	{
 		const auto l = cpuid( 1, 0 );
@@ -339,18 +343,22 @@ namespace cpu_info
 		return ( fid == 6 || fid == 15 ) ? mid | ( uint8_t( l.e.ax >> ( 16 - 4 ) ) & ~0b1111 )
 										 : mid;
 	}
+
 	inline cpu_processor_type type() noexcept
 	{ return static_cast< cpu_processor_type >( ( cpuid( 1, 0 ).e.ax >> 12 ) & 0b11 ); }
+
 	inline cpu_core_type core_type() noexcept
 	{
 		if ( cpuid( 0, 0 ).e.ax >= 0x1a ) return cpu_core_type( cpuid( 0x1a, 0 ).e.ax >> 24 );
 		else return cpu_core_type::DUNNO;
 	}
+
 	inline unsigned core_model() noexcept
 	{
 		if ( cpuid( 0, 0 ).e.ax >= 0x1a ) return cpu_core_type( cpuid( 0x1a, 0 ).e.ax & 0xffffff );
 		else return 0u;
 	}
+
 	inline string brand_string() noexcept
 	{
 		constexpr auto		  ext_index			   = 0x80000000u;
@@ -405,6 +413,7 @@ namespace cpu_info
 		}
 		return result;
 	}
+
 	inline cpu_efficiency efficiency() noexcept
 	{
 		if ( has_feature( cpu_feature::HYBRID ) ) // already checks leaf #0 for max leaf
@@ -412,33 +421,40 @@ namespace cpu_info
 																		   : effficient );
 		else return unknownEff;
 	}
+
 #pragma endregion
 
 #pragma region AFFINITY helpers in a platform independent fashion
 
 	/**
-	 *	Basic idea: instantiate such an iterator.
-	 *	- make it iterate thru all accessible CPUs (option 1)
-	 *	- make it point to a specific CPU (option 2)
+	 *	Original idea: provide some kind of "selected cpu iterator"
+	 *	Problem of that: IT HIDES VERY USEFUL CODE!
 	 *
-	 *	Problem of that "basic idea": IT HIDES VERY USEFUL CODE!
+	 *	Approach:
+	 *	-	`affinity` as an object to describe process or thread affinity in a platform
+	 *		independent manner.
+	 *	-	a simple bitset, a group number and for systems that support it, a special
+	 *		preferred cpu number.
 	 */
 	class affinity final
 	{
-		// Process/Thread affinity has:
-		// - an affinity bit mask
-		// - a group id (or omits it)
-		// - maybe a preferred cpu number (in case the system supports this setting)
 		std::vector< bool > bit_mask;
-		unsigned			group_id{ std::numeric_limits< unsigned >::max() };
+		unsigned			group_id{ 0 };
 		unsigned			pref_cpu{ std::numeric_limits< unsigned >::max() };
 
 	  public:
 		affinity() = default; // create empty
 		affinity( int n )	  // create with one cpu-number selected
 			: bit_mask( n, false )
+			, pref_cpu( n )
 		{ bit_mask.push_back( true ); }
-
+		// inherit is to be used to copy from this, but select only one valid cpu
+		affinity inherit( unsigned single_cpu )
+		{ // e.g. group id from this, pref_cpu and mask from the other.
+			affinity result( single_cpu );
+			result.group_id = group_id;
+			return result;
+		}
 		// check if all is empty / any bits are set
 		operator bool() const noexcept
 		{
@@ -446,12 +462,49 @@ namespace cpu_info
 				if ( b ) return true;
 			return false;
 		}
-		bool	  empty() const noexcept { return !( *this ); }
+		bool		empty() const noexcept { return !( *this ); }
+		// return a string representation
+					operator std::string() const noexcept { return to_string(); }
+		std::string to_string() const noexcept
+		{
+			int			i( count() );
+			std::string result( i, '-' );
+			for ( const auto &b: bit_mask ) result[ --i ] = b ? '+' : '-';
+			return result;
+		}
+		// count enabled items inside the mask
+		size_t count_enabled() const noexcept
+		{
+			int en{};
+			for ( auto b: bit_mask )
+				if ( b ) ++en;
+			return en;
+		}
+
 		// so it can be directly used after reading …
 		affinity &read_current() noexcept { return query(), *this; }
+
 		// set current thread affinity! USE WITH CARE!
-		void	  set_to_current() noexcept { apply(); }
-		void	  apply_next() noexcept { bit_mask.insert( bit_mask.begin(), false ), apply(); }
+		bool	  set_to_current() noexcept { return apply(); }
+
+		// for single cpu-masks, this "shifts" the mask by one cpu and applies it
+		bool	  apply_next() noexcept
+		{
+			// make sure it is a single mask
+			if ( count_enabled() == 1 )
+			{
+				// remove 'false' elements from the back, so checking by size works.
+				while ( !bit_mask.back() ) bit_mask.pop_back();
+				// in case the last cpu number was active, we're done
+				if ( bit_mask.size() != count() )
+				{
+					// shift mask by inserting an unused (e.g. 'false') bit
+					bit_mask.insert( bit_mask.begin(), false );
+					return apply();
+				}
+			}
+			return false;
+		}
 
 		affinity // operate on two sets producing another one.
 		op( const affinity &o, std::function< bool( bool, bool ) > operation ) const noexcept
@@ -468,9 +521,21 @@ namespace cpu_info
 		affinity operator&( const affinity &o ) const noexcept { return op( o, []( bool r, bool l ) { return ( r && l ); } ); }
 		affinity operator^( const affinity &o ) const noexcept { return op( o, []( bool r, bool l ) { return ( r ^ l ); } ); }
 		// clang-format on
+
+		affinity &operator+=( const int cpu_number ) noexcept
+		{
+			if ( cpu_number < count() )
+			{
+				if ( cpu_number >= bit_mask.size() )
+					bit_mask.resize( cpu_number, false ), bit_mask.push_back( true );
+				else bit_mask[ cpu_number ] = true;
+			}
+			return *this;
+		}
+
 	  private:
 #ifdef _WIN32
-		void query() noexcept
+		bool query() noexcept
 		{
 			/*	Multiple ways lead to Rome … we need: a cpu-group id AND an affinity mask
 			 *	→ easiest solution:
@@ -479,13 +544,14 @@ namespace cpu_info
 			 *		(logically, these affinities cover the previously acquired group id)
 			 */
 			PROCESSOR_NUMBER pn{};
-			KAFFINITY		 pm{};
+			KAFFINITY		 pm{}, sa{};
 			GetCurrentProcessorNumberEx( &pn );
-			GetProcessAffinityMask( GetCurrentProcess(), &pm, nullptr );
-			group_id = pn.Group;
-			pref_cpu = pn.Number;
+			bool result = GetProcessAffinityMask( GetCurrentProcess(), &pm, &sa );
+			group_id	= pn.Group;
+			pref_cpu	= pn.Number;
 			bit_mask.clear();
 			while ( pm ) bit_mask.push_back( pm & 1 ), pm >>= 1;
+			return result;
 		}
 		bool apply() noexcept
 		{
@@ -493,20 +559,22 @@ namespace cpu_info
 			ga.Group = group_id;
 			for ( auto b: std::views::reverse( bit_mask ) )
 				ga.Mask = ( KAFFINITY ) ( b | ( ga.Mask << 1 ) );
-			SetThreadGroupAffinity( GetCurrentThread(), &ga, nullptr );
+			bool result = SetThreadGroupAffinity( GetCurrentThread(), &ga, nullptr );
 			if ( pref_cpu >= 0 ) SetThreadIdealProcessor( GetCurrentThread(), ( DWORD ) pref_cpu );
+			return result;
 		}
 #elifdef linux
-		void query() noexcept
+		bool query() noexcept
 		{
 			int		   sz{ count() };
 			cpu_set_t *set{ CPU_ALLOC( sz ) };
-			sched_getaffinity( getpid(), sz, set );
+			auto	   result = sched_getaffinity( getpid(), sz, set ) == 0;
 			bit_mask.clear();
 			for ( int n: std::views::iota( 0, sz ) )
 				bit_mask.push_back( CPU_ISSET_S( n, sz, set ) );
 			CPU_FREE( set );
 			// i fear the linux cpu_set just has one group?
+			return result;
 		}
 		void apply() noexcept
 		{
@@ -516,23 +584,38 @@ namespace cpu_info
 			for ( auto b: bit_mask )
 				if ( b ) CPU_SET_S( i++, sz, s );
 				else CPU_CLR_S( i++, sz, s );
-			sched_setaffinity( getpid(), sz, s );
+			auto result = sched_setaffinity( getpid(), sz, s ) == 0;
 			CPU_FREE( s );
+			return result;
 		}
 #endif
 	};
 
+	/**
+	 *	And for "retrieving info from all cpus" - here it is, the iterator.
+	 *
+	 *	Upon construction:
+	 *	-	query current process affinity and remember it
+	 *	-	produce a single-cpu-affinity
+	 *	-	apply single-cpu-affinity
+	 *	Upon increment:
+	 *	-	switch to next cpu and return if end was reached
+	 */
 	class affinity_iterator final
 	{
 		affinity base, curr;
 
 	  public:
-		affinity_iterator()
-			: curr( 0 )
-		{ base.read_current(), curr.set_to_current(); }
+		affinity_iterator() { base.read_current(), ( curr = base.inherit( 0 ) ).set_to_current(); }
+		// in case the main thread was mistakenly not reset, it will be done upon leave.
 		~affinity_iterator() { base.set_to_current(); }
-						   operator bool() noexcept { return ( base & curr ); }
-		affinity_iterator &operator++() noexcept { return curr.apply_next(), *this; }
+		// switch to next logical core, return false when switching from the last core
+		// back to the main thread base setting.
+		bool operator++() noexcept
+		{
+			if ( curr.apply_next() ) return true;
+			return base.set_to_current(), false;
+		}
 	};
 
 #pragma endregion
