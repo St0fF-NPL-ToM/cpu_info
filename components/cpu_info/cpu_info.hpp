@@ -40,7 +40,7 @@
 namespace cpu_info
 {
 
-#pragma region constants, data types and namespace inclusions
+#pragma region constants, data types and the accessor-concept
 	/*
 	 *	The maximum number of enumerated domains, since X2APIC is 32 bits
 	 *	there really can't be more than 32 domains enumerated.
@@ -66,7 +66,7 @@ namespace cpu_info
 		} e;
 	};
 	template < class AT >
-	concept cpuid_accessor = requires( AT accessor, unsigned leaf, unsigned subleaf ) {
+	concept cpuid_accessor = requires( const AT &accessor, unsigned leaf, unsigned subleaf ) {
 		{ accessor.operator()( leaf, subleaf ) } -> convertible_to< cpuid_result >;
 	};
 #pragma endregion
@@ -250,6 +250,29 @@ namespace cpu_info
 #pragma region QUERY function templates accessing cpuid leafs through a templated function
 
 	template < cpuid_accessor AT >
+	bool leaf_valid( unsigned leaf, const AT &at = {} ) noexcept
+	{
+		// pre-extra-info-tests:
+		if ( ( leaf <= at( 0, 0 ).e.ax ) && !reserved.contains( leaf ) )
+		{
+			if ( requirements.contains( leaf ) ) // need a check
+			{
+				const auto &req = requirements.at( leaf );
+				// requires at least one other leaf to check if it is valid
+				if ( ( at( req >> 24, ( req >> 16 ) & 0xff ).r[ ( req >> 8 ) & 3 ]
+					   & ( 1 << ( req & 0x1f ) ) )
+					 == 0 )
+					return false; // I HATE EARLY OUTS
+			}
+			// needs the leaf itself to tell validity
+			if ( leaf == 0x0a ) return ( at( 0x0a, 0 ).e.ax & 0xff );
+			// any others should be valid reaching this point.
+			return true;
+		}
+		return false;
+	}
+
+	template < cpuid_accessor AT >
 	unsigned id_leaf( const AT &at = {} ) noexcept // query the ID-leaf
 	{
 		const auto ml = at( 0, 0 );
@@ -263,7 +286,7 @@ namespace cpu_info
 		const auto s = get_subleaf( feature );
 		const auto r = get_register( feature );
 		const auto b = get_bit( feature );
-		if ( l > 0 && l > id_leaf( at ) ) return false;
+		if ( !leaf_valid( l, at ) ) return false;
 		else return ( at( l, s ).r[ r ] >> b ) & 1;
 	}
 
@@ -281,7 +304,7 @@ namespace cpu_info
 	int domain_shift( cpu_domain domain, const AT &at = {} ) noexcept // query domain shift
 	{
 		const auto ml = at( 0, 0 );
-		if ( ml.e.ax <= 1 ) // catch "illegal object" as "don't know anything"
+		if ( ml.e.ax < 0xb ) // catch "illegal object" as "don't know anything"
 		{
 			if ( !has_feature( cpu_feature::HTT, at ) ) return create_topology_shift( 1 );
 			else // max_leaf minimum = 1
@@ -364,15 +387,15 @@ namespace cpu_info
 	template < cpuid_accessor AT >
 	cpu_core_type core_type( const AT &at = {} ) noexcept
 	{
-		if ( at( 0, 0 ).e.ax >= 0x1a ) return cpu_core_type( at( 0x1a, 0 ).e.ax >> 24 );
-		else return cpu_core_type::DUNNO;
+		if ( at( 0, 0 ).e.ax < 0x1a ) return cpu_core_type::DUNNO;
+		else return cpu_core_type( at( 0x1a, 0 ).e.ax >> 24 );
 	}
 
 	template < cpuid_accessor AT >
 	unsigned core_model( const AT &at = {} ) noexcept
 	{
-		if ( at( 0, 0 ).e.ax >= 0x1a ) return cpu_core_type( at( 0x1a, 0 ).e.ax & 0xffffff );
-		else return 0u;
+		if ( at( 0, 0 ).e.ax < 0x1a ) return 0u;
+		else return at( 0x1a, 0 ).e.ax & 0xffffff;
 	}
 
 	template < cpuid_accessor AT >
@@ -419,7 +442,6 @@ namespace cpu_info
 						 : cpu_efficiency::effficient );
 		else return cpu_efficiency::unknownEff;
 	}
-
 #pragma endregion
 
 #pragma region CPUID instruction, query logical cpu count - platform independent implementation
@@ -428,7 +450,7 @@ namespace cpu_info
 	class CPUID
 	{
 	  public:
-		static cpuid_result operator()( unsigned Leaf, unsigned Subleaf ) noexcept
+		cpuid_result operator()( unsigned Leaf, unsigned Subleaf ) const noexcept
 		{
 			cpuid_result CpuidRegisters{};
 #if _WIN32
