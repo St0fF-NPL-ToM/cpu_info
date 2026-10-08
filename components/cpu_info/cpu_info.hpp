@@ -22,16 +22,17 @@
 #ifdef _WIN32
 	#define NOMINMAX
 	#include <Windows.h>
-#elifdef linux
+#elifdef __linux
 	#include <sys/sysinfo.h>
 	#include <unistd.h>
 	#include <sched.h>
 #endif
 
-#include <cstdint>
 #include <string>
 #include <ranges>
 #include <vector>
+#include <limits>
+#include <cstdint>
 #include <functional>
 
 namespace cpu_info
@@ -260,18 +261,18 @@ namespace cpu_info
 		else return ( cpuid( l, s ).r[ r ] >> b ) & 1;
 	}
 
+	constexpr unsigned create_topology_shift( unsigned int count )
+	{
+		unsigned int Shift{ 31u };
+		unsigned int Index{ ( 1u << Shift ) };
+		count = ( count * 2 ) - 1;
+		for ( ; Index; Index >>= 1, Shift-- )
+			if ( count & Index ) break;
+		return Shift;
+	};
+
 	inline int domain_shift( cpu_domain domain ) noexcept // query domain shift
 	{
-		constexpr auto create_topology_shift = []( unsigned int count ) -> unsigned
-		{
-			unsigned int Shift{ 31u };
-			unsigned int Index{ ( 1u << Shift ) };
-			count = ( count * 2 ) - 1;
-			for ( ; Index; Index >>= 1, Shift-- )
-				if ( count & Index ) break;
-			return Shift;
-		};
-
 		const auto ml = cpuid( 0, 0 );
 		if ( ml.e.ax <= 1 ) // catch "illegal object" as "don't know anything"
 		{
@@ -392,7 +393,7 @@ namespace cpu_info
 				const auto x = cpuid( s, 0u );
 				for ( auto i: views::iota( 0, 4 ) ) *p++ = x.r[ i ];
 			}
-		} else if ( auto l1 = cpuid( 1, 0 ); auto brand_index = std::min( 0x17u, l1.e.bx & 0xff ) )
+		} else if ( auto l1 = cpuid( 1, 0 ); auto brand_index = min( 0x17u, l1.e.bx & 0xff ) )
 		{ // use middle-aged brand index method
 
 			unsigned mf	 = uint8_t( l1.e.ax >> 8 ) & 0b1111; // need only leaf 1 - so,
@@ -438,9 +439,65 @@ namespace cpu_info
 	 */
 	class affinity final
 	{
-		std::vector< bool > bit_mask;
-		unsigned			group_id{ 0 };
-		unsigned			pref_cpu{ std::numeric_limits< unsigned >::max() };
+		vector< bool > bit_mask;
+		unsigned	   group_id{ 0 };
+		unsigned	   pref_cpu{ numeric_limits< unsigned >::max() };
+#pragma region affinity - private OS-agnostic implementations
+#ifdef _WIN32
+		bool query() noexcept
+		{
+			/*	Multiple ways lead to Rome … we need: a cpu-group id AND an affinity mask
+			 *	→ easiest solution:
+			 *		- GetCurrentProcessorNumberEx:	currently active cpu-group id
+			 *		- GetProcessAffinityMask:		process affinity and system affinity
+			 *		(logically, these affinities cover the previously acquired group id)
+			 */
+			PROCESSOR_NUMBER pn{};
+			KAFFINITY		 pm{}, sa{};
+			GetCurrentProcessorNumberEx( &pn );
+			bool result = GetProcessAffinityMask( GetCurrentProcess(), &pm, &sa );
+			group_id	= pn.Group;
+			pref_cpu	= pn.Number;
+			bit_mask.clear();
+			while ( pm ) bit_mask.push_back( pm & 1 ), pm >>= 1;
+			return result;
+		}
+		bool apply() noexcept
+		{
+			GROUP_AFFINITY ga{};
+			ga.Group = group_id;
+			for ( auto b: views::reverse( bit_mask ) )
+				ga.Mask = ( KAFFINITY ) ( b | ( ga.Mask << 1 ) );
+			bool result = SetThreadGroupAffinity( GetCurrentThread(), &ga, nullptr );
+			if ( pref_cpu >= 0 ) SetThreadIdealProcessor( GetCurrentThread(), ( DWORD ) pref_cpu );
+			return result;
+		}
+#elifdef __linux
+		bool query() noexcept
+		{
+			int		   sz{ count() };
+			cpu_set_t *set{ CPU_ALLOC( sz ) };
+			auto	   result = sched_getaffinity( getpid(), sz, set ) == 0;
+			bit_mask.clear();
+			for ( int n: views::iota( 0, sz ) ) bit_mask.push_back( CPU_ISSET_S( n, sz, set ) );
+			CPU_FREE( set );
+			// i fear the linux cpu_set just has one group?
+			return result;
+		}
+		bool apply() noexcept
+		{
+			int	  sz{ count() }, i{};
+			auto *s = CPU_ALLOC( sz );
+			CPU_ZERO_S( sz, s );
+			for ( auto b: bit_mask )
+				if ( b ) CPU_SET_S( i++, sz, s );
+				else CPU_CLR_S( i++, sz, s );
+			auto result = sched_setaffinity( getpid(), sz, s ) == 0;
+			CPU_FREE( s );
+			return result;
+		}
+#endif
+#pragma endregion
 
 	  public:
 		affinity() = default; // create empty
@@ -462,13 +519,13 @@ namespace cpu_info
 				if ( b ) return true;
 			return false;
 		}
-		bool		empty() const noexcept { return !( *this ); }
+		bool   empty() const noexcept { return !( *this ); }
 		// return a string representation
-					operator std::string() const noexcept { return to_string(); }
-		std::string to_string() const noexcept
+			   operator string() const noexcept { return to_string(); }
+		string to_string() const noexcept
 		{
-			int			i( count() );
-			std::string result( i, '-' );
+			int	   i( count() );
+			string result( i, '-' );
 			for ( const auto &b: bit_mask ) result[ --i ] = b ? '+' : '-';
 			return result;
 		}
@@ -507,12 +564,12 @@ namespace cpu_info
 		}
 
 		affinity // operate on two sets producing another one.
-		op( const affinity &o, std::function< bool( bool, bool ) > operation ) const noexcept
+		op( const affinity &o, function< bool( bool, bool ) > operation ) const noexcept
 		{
 			affinity   res( *this );
-			const auto sm{ bit_mask.size() }, so{ o.bit_mask.size() }, sz{ std::max( sm, so ) };
+			const auto sm{ bit_mask.size() }, so{ o.bit_mask.size() }, sz{ max( sm, so ) };
 			res.bit_mask.resize( sz );
-			for ( auto i: std::views::iota( 0ul, bit_mask.size() ) )
+			for ( auto i: views::iota( 0ul, bit_mask.size() ) )
 				res.bit_mask[ i ] = operation( ( i >= sm ? false : bit_mask[ i ] ),
 											   ( i >= so ? false : o.bit_mask[ i ] ) );
 			return res;
@@ -532,63 +589,6 @@ namespace cpu_info
 			}
 			return *this;
 		}
-
-	  private:
-#ifdef _WIN32
-		bool query() noexcept
-		{
-			/*	Multiple ways lead to Rome … we need: a cpu-group id AND an affinity mask
-			 *	→ easiest solution:
-			 *		- GetCurrentProcessorNumberEx:	currently active cpu-group id
-			 *		- GetProcessAffinityMask:		process affinity and system affinity
-			 *		(logically, these affinities cover the previously acquired group id)
-			 */
-			PROCESSOR_NUMBER pn{};
-			KAFFINITY		 pm{}, sa{};
-			GetCurrentProcessorNumberEx( &pn );
-			bool result = GetProcessAffinityMask( GetCurrentProcess(), &pm, &sa );
-			group_id	= pn.Group;
-			pref_cpu	= pn.Number;
-			bit_mask.clear();
-			while ( pm ) bit_mask.push_back( pm & 1 ), pm >>= 1;
-			return result;
-		}
-		bool apply() noexcept
-		{
-			GROUP_AFFINITY ga{};
-			ga.Group = group_id;
-			for ( auto b: std::views::reverse( bit_mask ) )
-				ga.Mask = ( KAFFINITY ) ( b | ( ga.Mask << 1 ) );
-			bool result = SetThreadGroupAffinity( GetCurrentThread(), &ga, nullptr );
-			if ( pref_cpu >= 0 ) SetThreadIdealProcessor( GetCurrentThread(), ( DWORD ) pref_cpu );
-			return result;
-		}
-#elifdef linux
-		bool query() noexcept
-		{
-			int		   sz{ count() };
-			cpu_set_t *set{ CPU_ALLOC( sz ) };
-			auto	   result = sched_getaffinity( getpid(), sz, set ) == 0;
-			bit_mask.clear();
-			for ( int n: std::views::iota( 0, sz ) )
-				bit_mask.push_back( CPU_ISSET_S( n, sz, set ) );
-			CPU_FREE( set );
-			// i fear the linux cpu_set just has one group?
-			return result;
-		}
-		bool apply() noexcept
-		{
-			int	  sz{ count() }, i{};
-			auto *s = CPU_ALLOC( sz );
-			CPU_ZERO_S( sz, s );
-			for ( auto b: bit_mask )
-				if ( b ) CPU_SET_S( i++, sz, s );
-				else CPU_CLR_S( i++, sz, s );
-			auto result = sched_setaffinity( getpid(), sz, s ) == 0;
-			CPU_FREE( s );
-			return result;
-		}
-#endif
 	};
 
 	/**
