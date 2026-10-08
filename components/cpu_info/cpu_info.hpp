@@ -31,6 +31,8 @@
 #include <string>
 #include <ranges>
 #include <vector>
+#include <map>
+#include <set>
 #include <limits>
 #include <cstdint>
 #include <functional>
@@ -38,25 +40,50 @@
 namespace cpu_info
 {
 
-#pragma region INTEL keywords, flags and respective enumerations
+#pragma region constants, data types and namespace inclusions
 	/*
 	 *	The maximum number of enumerated domains, since X2APIC is 32 bits
 	 *	there really can't be more than 32 domains enumerated.
 	 */
 	constexpr unsigned MAXIMUM_DOMAINS = 32;
 	constexpr unsigned MAX_PROCESSORS  = 1024; // not sure if this is necessary!
-	// clang-format off
+
+	// data types and namespace inclusions
+	using namespace std;
+
+	using APIC_id = unsigned;
+	using id_mask = unsigned;
+
 	/**
-	* 	enumeration of Intel-defined cpu capability flags userspace might want to test.
-	*
-	* 	to provide a clean nomenclature, let's assume some factors:
-	*	- LEAF: (feat >> 8) & 0xff
-	*	- SUB:	(feat >> 16) & 0xff
-	*	- REG:	(feat >> 5) & 0x03
-	*	- BIT:	(feat >> 0) & 0x1f
-	*
-	*	This makes up for an X-Macro-List ( NAME, REG, BIT, LEAF, SUB )
-	*/
+	 * 	Result of a cpuid - instruction (simply 4 32bit registers)
+	 */
+	union cpuid_result
+	{
+		unsigned int r[ 4 ];
+		struct
+		{
+			unsigned int ax, bx, cx, dx;
+		} e;
+	};
+	template < class AT >
+	concept cpuid_accessor = requires( AT accessor, unsigned leaf, unsigned subleaf ) {
+		{ accessor.operator()( leaf, subleaf ) } -> convertible_to< cpuid_result >;
+	};
+#pragma endregion
+
+#pragma region INTEL keywords, flags and respective enumerations, constants
+	/**
+	 * 	enumeration of Intel-defined cpu capability flags userspace might want to test.
+	 *
+	 * 	to provide a clean nomenclature, let's assume some factors:
+	 *	- LEAF: (feat >> 8) & 0xff
+	 *	- SUB:	(feat >> 16) & 0xff
+	 *	- REG:	(feat >> 5) & 0x03
+	 *	- BIT:	(feat >> 0) & 0x1f
+	 *
+	 *	This makes up for an X-Macro-List ( NAME, REG, BIT, LEAF, SUB )
+	 */
+	// clang-format off
 	#define CPU_FEATURES( X ) \
 		X( SSE3, 2, 0, 1, 0 )				X( PCLMULQDQ, 2, 1, 1, 0 )	X( DTES64, 2, 2, 1, 0 )\
 		X( MONITOR, 2, 3, 1, 0 )			X( DS_CPL, 2, 4, 1, 0 )		X( VMX, 2, 5, 1, 0 )\
@@ -174,91 +201,70 @@ namespace cpu_info
 	 *	core_type::Atom vs. core_type::Core.
 	 */
 	#define EFFICIENCY_TYPE( X ) X( unknownEff, 0 ) X( effficient, 1 ) X( performant, 2 )
-	enum cpu_efficiency { EFFICIENCY_TYPE( X ) };
+	enum class cpu_efficiency { EFFICIENCY_TYPE( X ) };
 	#undef X
 	// clang-format on
-#pragma endregion
-
-#pragma region CPUID instruction, query logical cpu count - platform independent implementation
-	// data types and namespace inclusions
-	using namespace std;
-
-	using APIC_id = unsigned;
-	using id_mask = unsigned;
-
-	/**
-	 * 	Result of a cpuid - instruction (simply 4 32bit registers)
-	 */
-	union cpuid_result
-	{
-		unsigned int r[ 4 ];
-		struct
-		{
-			unsigned int ax, bx, cx, dx;
-		} e;
+	constexpr auto		  ext_index			   = 0x80000000u;
+	constexpr auto		  brand_string_support = 0x80000004u;
+	constexpr const char *brand_strings[]{
+		"Intel® Celeron®",
+		"Intel® Pentium® III",
+		"Intel® Pentium® III Xeon®",
+		"Intel® Pentium® M",
+		"Mobile Intel® Pentium® III-M",
+		"Mobile Intel® Celeron®",
+		"Intel® Pentium® 4",
+		"Intel® Xeon®",
+		"Intel® Xeon® MP",
+		"Mobile Intel® Pentium® 4-M",
+		"Mobile Genuine Intel®",
+		"Intel® Celeron® M",
 	};
-
-	// execute the cpuid instruction
-	inline cpuid_result cpuid( unsigned Leaf, unsigned Subleaf ) noexcept
-	{
-		cpuid_result CpuidRegisters{};
-#if _WIN32
-		__cpuidex( reinterpret_cast< int * >( &CpuidRegisters.r[ 0 ] ), Leaf, Subleaf );
-#elif linux
-		unsigned int ReturnEax;
-		unsigned int ReturnEbx;
-		unsigned int ReturnEcx;
-		unsigned int ReturnEdx;
-
-		asm( "movl %4, %%eax\n"
-			 "movl %5, %%ecx\n"
-			 "CPUID\n"
-			 "movl %%eax, %0\n"
-			 "movl %%ebx, %1\n"
-			 "movl %%ecx, %2\n"
-			 "movl %%edx, %3\n"
-			 : "=r"( ReturnEax ), "=r"( ReturnEbx ), "=r"( ReturnEcx ), "=r"( ReturnEdx )
-			 : "r"( Leaf ), "r"( Subleaf )
-			 : "%eax", "%ebx", "%ecx", "%edx" );
-
-		CpuidRegisters.e.ax = ReturnEax;
-		CpuidRegisters.e.bx = ReturnEbx;
-		CpuidRegisters.e.cx = ReturnEcx;
-		CpuidRegisters.e.dx = ReturnEdx;
-#else
-#endif
-		return CpuidRegisters;
-	}
-
-	// query available logical cpus
-	inline int count() noexcept
-	{
-#ifdef _WIN32
-		PROCESSOR_NUMBER pn{};
-		GetCurrentProcessorNumberEx( &pn );
-		return GetActiveProcessorCount( pn.Group );
-#elifdef linux
-		return get_nprocs();
-#endif
-	}
+	// some of Intel®'s strings were double-defined or reserved/empty. So this is a remapping:
+	constexpr unsigned			 brand_reindex[] = { 0x00, 0x01, 0x02, 0x01, 0,	   0x04, 0x05, 0x06,
+													 0x06, 0x00, 0x07, 0x08, 0,	   0x09, 0x05, 0,
+													 0x0a, 0x0b, 0x05, 0x00, 0x0a, 0x03, 0x05 };
+	/* CPUID LEAF INTERPRETATION DATA → unsupported/reserved leaf ids: */
+	static const set< unsigned > reserved{ 0x08, 0x0c, 0x0e, 0x11, 0x13, 0x21, 0x22, 0x25, 0x26 };
+	static const map< unsigned, unsigned > requirements{
+		// clang-format off
+		{ 0x09, 0x01000200u + 18 }, // This leaf is valid if CPUID.01H:ECX.DCA[18] = 1
+		{ 0x0d, 0x01000200u + 26 }, // This leaf is valid if CPUID.01H:ECX.XSAVE[26] = 1
+		{ 0x0f, 0x07000100u + 12 }, // This leaf is valid if CPUID.07H.00H:EBX.RDT_M[12] = 1
+		{ 0x10, 0x07000100u + 15 }, // This leaf is valid if CPUID.07H.00H:EBX.RDT_A[15] = 1
+		{ 0x12, 0x07000100u + 2 },	// This leaf is valid if CPUID.07H.00H:EBX.SGX[2]
+		{ 0x14, 0x07000100u + 25 }, // This leaf is valid if CPUID.07H.00H:EBX.INTEL_PROC_TRACE[25] = 1
+		{ 0x19, 0x07000200u + 23 }, // This leaf is valid if CPUID.07H.00H:ECX.KEY_LOCKER[23] = 1
+		{ 0x1b, 0x07000300u + 18 }, // This leaf is valid if CPUID.07H.00H:EDX.PCONFIG[18] = 1
+		{ 0x1c, 0x07000300u + 19 }, // This leaf is valid if CPUID.07H.00H:EDX.ARCH_LBRS[19] = 1
+		{ 0x1d, 0x07000300u + 24 }, // This leaf is valid if CPUID.07H.00H:EDX.AMX_TILE[24] = 1
+		{ 0x1e, 0x07000300u + 24 }, // This leaf is valid if CPUID.07H.00H:EDX.AMX_TILE[24] = 1
+		{ 0x20, 0x07010000u + 22 }, // This leaf is valid if CPUID.07H.01H:EAX.HRESET[22] = 1
+		{ 0x23, 0x07010000u + 8 }, // This leaf is valid if CPUID.07H.01H:EAX.ARCH_PERFMON_EXT[8] = 1
+		{ 0x24, 0x07010300u + 19 }, // This leaf is valid if CPUID.07H.01H:EDX.AVX10[19] = 1
+		{ 0x27, 0x07010200u + 0 },	// This leaf is valid if CPUID.07H.01H:ECX.RDT_M_ASYM[0] = 1
+		{ 0x28, 0x07010200u + 1 },	// This leaf is valid if CPUID.07H.01H:ECX.RDT_A_SYM[1] = 1
+	}; // clang-format on
 #pragma endregion
 
-#pragma region QUERY functions accessing current cpu
+#pragma region QUERY function templates accessing cpuid leafs through a templated function
 
-	inline unsigned id_leaf() noexcept // query the ID-leaf
+	template < cpuid_accessor AT >
+	unsigned id_leaf( const AT &at = {} ) noexcept // query the ID-leaf
 	{
-		const auto ml = cpuid( 0, 0 );
+		const auto ml = at( 0, 0 );
 		return ml.e.ax ? ml.e.ax < 0x1f ? ml.e.ax < 0x0b ? 1 : 0x0b : 0x1f : 0;
 	}
 
-	inline bool has_feature( cpu_feature feature ) noexcept // check a specific feature
+	template < cpuid_accessor AT >
+	bool has_feature( cpu_feature feature, const AT &at = {} ) noexcept // check a specific feature
 	{
 		const auto l = get_leaf( feature );
 		const auto s = get_subleaf( feature );
 		const auto r = get_register( feature );
 		const auto b = get_bit( feature );
-		if ( l > 0 && l > id_leaf() ) return false;
-		else return ( cpuid( l, s ).r[ r ] >> b ) & 1;
+		if ( l > 0 && l > id_leaf( at ) ) return false;
+		else return ( at( l, s ).r[ r ] >> b ) & 1;
 	}
 
 	constexpr unsigned create_topology_shift( unsigned int count )
@@ -271,31 +277,32 @@ namespace cpu_info
 		return Shift;
 	};
 
-	inline int domain_shift( cpu_domain domain ) noexcept // query domain shift
+	template < cpuid_accessor AT >
+	int domain_shift( cpu_domain domain, const AT &at = {} ) noexcept // query domain shift
 	{
-		const auto ml = cpuid( 0, 0 );
+		const auto ml = at( 0, 0 );
 		if ( ml.e.ax <= 1 ) // catch "illegal object" as "don't know anything"
 		{
-			if ( !has_feature( cpu_feature::HTT ) ) return create_topology_shift( 1 );
+			if ( !has_feature( cpu_feature::HTT, at ) ) return create_topology_shift( 1 );
 			else // max_leaf minimum = 1
 			{
-				const auto MaxIdsPhysical = ( unsigned ) ( ( cpuid( 1, 0 ).e.bx >> 16 ) & 0xFF );
+				const auto MaxIdsPhysical = ( unsigned ) ( ( at( 1, 0 ).e.bx >> 16 ) & 0xFF );
 				// This would be a 20+ year old platform to not support CPUID.4 … You cannot report
 				// Cores here, a Package == Core and so this only reports SMT within a Package.
 				if ( ml.e.ax < 4 || domain != cpu_domain::LogicalDomain )
 					return create_topology_shift( MaxIdsPhysical );
 				else /* MaximumAddressibleIdsCores: CPUID.4.0.EAX[31:26] */
 					return create_topology_shift( MaxIdsPhysical
-												  / ( ( cpuid( 4, 0 ).e.ax >> 26 ) + 1 ) );
+												  / ( ( at( 4, 0 ).e.ax >> 26 ) + 1 ) );
 			}
 		} else
 		{
 			unsigned il = ml.e.ax < 0x1f ? 0x0b : 0x1f;
 			unsigned sub{ 0 };
-			auto	 sl = cpuid( il, sub );
+			auto	 sl = at( il, sub );
 			for ( ; sl.e.bx != 0; ++sub )
 			{
-				if ( sub ) sl = cpuid( il, sub );
+				if ( sub ) sl = at( il, sub );
 				// CPUID.B or 1F.x.ECX[15:8] = Level Type / Domain Type
 				// CPUID.B or 1F.x.EAX[4:0] = Level Shift / Domain Shift
 				if ( domain == ( ( sl.e.cx >> 8 ) & 0xFF ) ) return sl.e.ax & 0x1F;
@@ -304,96 +311,84 @@ namespace cpu_info
 		}
 	}
 
-	inline id_mask domain_mask( cpu_domain domain ) noexcept // query domain mask
+	template < cpuid_accessor AT >
+	id_mask domain_mask( cpu_domain domain, const AT &at = {} ) noexcept // query domain mask
 	{
 		if ( domain <= cpu_domain::LogicalDomain ) return -1u;
 		// was ist nochmal die korrekte Domain Mask?  Bedeutet ja, dass 0-basierte Indices
 		// rauskommen! Logical/Invalid: 0b1111… komplette ID Core: 	shift( Logical )= 1	→ in meinem
 		// Falle: 0b01111110 Module: 	shift( Core ) 	= 7
-		const auto ps = domain_shift( cpu_domain( domain - 1 ) );
-		const auto ds = domain_shift( domain );
+		const auto ps = domain_shift( cpu_domain( domain - 1 ), at );
+		const auto ds = domain_shift( domain, at );
 		return ( ( 1 << ds ) - 1 ) ^ ( ( 1 << ps ) - 1 );
 	}
 
-	inline APIC_id // produce apic_id - default logical domain is complete and unmasked!
-	apic_id( cpu_domain domain = cpu_domain::LogicalDomain ) noexcept
+	template < cpuid_accessor AT >
+	APIC_id // produce apic_id - default logical domain is complete and unmasked!
+	apic_id( cpu_domain domain = cpu_domain::LogicalDomain, const AT &at = {} ) noexcept
 	{
-		const auto sl = id_leaf(); // retrieve APIC_ID
-		const auto id = ( sl > 1 ) ? cpuid( sl, 0 ).e.dx
-						: sl	   ? cpuid( 1, 0 ).e.bx >> 24
+		const auto sl = id_leaf( at ); // retrieve APIC_ID
+		const auto id = ( sl > 1 ) ? at( sl, 0 ).e.dx
+						: sl	   ? at( 1, 0 ).e.bx >> 24
 								   : -1u; // illegal!
 										  // produce masked and shifted value
-		return ( id & domain_mask( domain ) ) >> domain_shift( cpu_domain( domain - 1 ) );
+		return ( id & domain_mask( domain, at ) ) >> domain_shift( cpu_domain( domain - 1 ), at );
 	}
 
-	inline uint8_t stepping() noexcept
-	{ return cpuid( 1, 0 ).e.ax & 0b1111; }
+	template < cpuid_accessor AT >
+	uint8_t stepping( const AT &at = {} ) noexcept
+	{ return at( 1, 0 ).e.ax & 0b1111; }
 
-	inline uint8_t family() noexcept
+	template < cpuid_accessor AT >
+	uint8_t family( const AT &at = {} ) noexcept
 	{
-		const auto l = cpuid( 1, 0 );
+		const auto l = at( 1, 0 );
 		const auto fid{ uint8_t( l.e.ax >> 8 ) & 0b1111 };
 		return ( fid != 0x0f ? fid : fid + ( ( l.e.ax >> 20 ) & 0xff ) );
 	}
 
-	inline uint8_t model() noexcept
+	template < cpuid_accessor AT >
+	uint8_t model( const AT &at = {} ) noexcept
 	{
-		const auto l = cpuid( 1, 0 );
+		const auto l = at( 1, 0 );
 		auto	   fid{ uint8_t( l.e.ax >> 8 ) & 0b1111 };
 		auto	   mid{ uint8_t( l.e.ax >> 4 ) & 0b1111 };
 		return ( fid == 6 || fid == 15 ) ? mid | ( uint8_t( l.e.ax >> ( 16 - 4 ) ) & ~0b1111 )
 										 : mid;
 	}
 
-	inline cpu_processor_type type() noexcept
-	{ return static_cast< cpu_processor_type >( ( cpuid( 1, 0 ).e.ax >> 12 ) & 0b11 ); }
+	template < cpuid_accessor AT >
+	cpu_processor_type type( const AT &at = {} ) noexcept
+	{ return static_cast< cpu_processor_type >( ( at( 1, 0 ).e.ax >> 12 ) & 0b11 ); }
 
-	inline cpu_core_type core_type() noexcept
+	template < cpuid_accessor AT >
+	cpu_core_type core_type( const AT &at = {} ) noexcept
 	{
-		if ( cpuid( 0, 0 ).e.ax >= 0x1a ) return cpu_core_type( cpuid( 0x1a, 0 ).e.ax >> 24 );
+		if ( at( 0, 0 ).e.ax >= 0x1a ) return cpu_core_type( at( 0x1a, 0 ).e.ax >> 24 );
 		else return cpu_core_type::DUNNO;
 	}
 
-	inline unsigned core_model() noexcept
+	template < cpuid_accessor AT >
+	unsigned core_model( const AT &at = {} ) noexcept
 	{
-		if ( cpuid( 0, 0 ).e.ax >= 0x1a ) return cpu_core_type( cpuid( 0x1a, 0 ).e.ax & 0xffffff );
+		if ( at( 0, 0 ).e.ax >= 0x1a ) return cpu_core_type( at( 0x1a, 0 ).e.ax & 0xffffff );
 		else return 0u;
 	}
 
-	inline string brand_string() noexcept
+	template < cpuid_accessor AT >
+	string brand_string( const AT &at = {} ) noexcept
 	{
-		constexpr auto		  ext_index			   = 0x80000000u;
-		constexpr auto		  brand_string_support = 0x80000004u;
-		constexpr const char *brand_strings[]{
-			"Intel® Celeron®",
-			"Intel® Pentium® III",
-			"Intel® Pentium® III Xeon®",
-			"Intel® Pentium® M",
-			"Mobile Intel® Pentium® III-M",
-			"Mobile Intel® Celeron®",
-			"Intel® Pentium® 4",
-			"Intel® Xeon®",
-			"Intel® Xeon® MP",
-			"Mobile Intel® Pentium® 4-M",
-			"Mobile Genuine Intel®",
-			"Intel® Celeron® M",
-		}; // some of Intel®'s strings were double-defined or reserved/empty. So this is a
-		   // remapping:
-		constexpr unsigned brand_reindex[] = { 0x00, 0x01, 0x02, 0x01, 0,	 0x04, 0x05, 0x06,
-											   0x06, 0x00, 0x07, 0x08, 0,	 0x09, 0x05, 0,
-											   0x0a, 0x0b, 0x05, 0x00, 0x0a, 0x03, 0x05 };
-
-		string			   result;
-		if ( const auto sup = cpuid( ext_index, 0u ); sup.e.ax >= brand_string_support )
+		string result;
+		if ( const auto sup = at( ext_index, 0u ); sup.e.ax >= brand_string_support )
 		{ // use brand string method
 			result.resize( 4 * 4 * 3 + 1 );
 			auto *p = reinterpret_cast< unsigned * >( result.data() );
 			for ( auto s{ ext_index + 2 }; s <= brand_string_support; ++s )
 			{
-				const auto x = cpuid( s, 0u );
+				const auto x = at( s, 0u );
 				for ( auto i: views::iota( 0, 4 ) ) *p++ = x.r[ i ];
 			}
-		} else if ( auto l1 = cpuid( 1, 0 ); auto brand_index = min( 0x17u, l1.e.bx & 0xff ) )
+		} else if ( auto l1 = at( 1, 0 ); auto brand_index = min( 0x17u, l1.e.bx & 0xff ) )
 		{ // use middle-aged brand index method
 
 			unsigned mf	 = uint8_t( l1.e.ax >> 8 ) & 0b1111; // need only leaf 1 - so,
@@ -415,14 +410,67 @@ namespace cpu_info
 		return result;
 	}
 
-	inline cpu_efficiency efficiency() noexcept
+	template < cpuid_accessor AT >
+	cpu_efficiency efficiency( const AT &at = {} ) noexcept
 	{
-		if ( has_feature( cpu_feature::HYBRID ) ) // already checks leaf #0 for max leaf
-			return ( ( cpuid( 0x1a, 0 ).e.ax & 0x70000000u ) > 0x20000000u ? performant
-																		   : effficient );
-		else return unknownEff;
+		if ( has_feature( cpu_feature::HYBRID, at ) ) // already checks leaf #0 for max leaf
+			return ( ( at( 0x1a, 0 ).e.ax & 0x70000000u ) > 0x20000000u
+						 ? cpu_efficiency::performant
+						 : cpu_efficiency::effficient );
+		else return cpu_efficiency::unknownEff;
 	}
 
+#pragma endregion
+
+#pragma region CPUID instruction, query logical cpu count - platform independent implementation
+
+	// Accessor to execute the cpuid instruction
+	class CPUID
+	{
+	  public:
+		static cpuid_result operator()( unsigned Leaf, unsigned Subleaf ) noexcept
+		{
+			cpuid_result CpuidRegisters{};
+#if _WIN32
+			__cpuidex( reinterpret_cast< int * >( &CpuidRegisters.r[ 0 ] ), Leaf, Subleaf );
+#elif __linux
+			unsigned int ReturnEax;
+			unsigned int ReturnEbx;
+			unsigned int ReturnEcx;
+			unsigned int ReturnEdx;
+
+			asm( "movl %4, %%eax\n"
+				 "movl %5, %%ecx\n"
+				 "CPUID\n"
+				 "movl %%eax, %0\n"
+				 "movl %%ebx, %1\n"
+				 "movl %%ecx, %2\n"
+				 "movl %%edx, %3\n"
+				 : "=r"( ReturnEax ), "=r"( ReturnEbx ), "=r"( ReturnEcx ), "=r"( ReturnEdx )
+				 : "r"( Leaf ), "r"( Subleaf )
+				 : "%eax", "%ebx", "%ecx", "%edx" );
+
+			CpuidRegisters.e.ax = ReturnEax;
+			CpuidRegisters.e.bx = ReturnEbx;
+			CpuidRegisters.e.cx = ReturnEcx;
+			CpuidRegisters.e.dx = ReturnEdx;
+#else
+#endif
+			return CpuidRegisters;
+		}
+	};
+
+	// query available logical cpus
+	inline int count() noexcept
+	{
+#ifdef _WIN32
+		PROCESSOR_NUMBER pn{};
+		GetCurrentProcessorNumberEx( &pn );
+		return GetActiveProcessorCount( pn.Group );
+#elifdef __linux
+		return get_nprocs();
+#endif
+	}
 #pragma endregion
 
 #pragma region AFFINITY helpers in a platform independent fashion
@@ -616,6 +664,26 @@ namespace cpu_info
 			if ( curr.apply_next() ) return true;
 			return base.set_to_current(), false;
 		}
+	};
+	/**
+	 *	Another important point is: sometimes multiple calls shall be made to one logical core in a
+	 *	row, but no iteration over all cores is necessary.  Then, you need to be able to core-lock.
+	 *
+	 *	This is a lock as "herkömmliche Schlösser".  You create the instance in local scope and it
+	 *	locks immediately.  Upon leaving the scope, the DTor is invoked and original thread affinity
+	 *	gets restored.
+	 */
+	class affinity_lock final
+	{
+		affinity original;
+
+	  public:
+		affinity_lock()						   = delete;
+		affinity_lock( const affinity_lock & ) = delete;
+		affinity_lock( affinity_lock && )	   = delete;
+		explicit affinity_lock( int cpu_number )
+		{ original.read_current().inherit( cpu_number ).set_to_current(); }
+		~affinity_lock() { original.set_to_current(); }
 	};
 
 #pragma endregion
