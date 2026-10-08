@@ -75,8 +75,11 @@ namespace cpu_info
 		cpu_processor_type type() const noexcept { return cpu_info::type( *this ); }
 		cpu_core_type	   core_type() const noexcept { return cpu_info::core_type( *this ); }
 		unsigned		   core_model() const noexcept { return cpu_info::core_model( *this ); }
-		std::string		   brand_string() const noexcept { return cpu_info::brand_string( *this ); }
 		cpu_efficiency	   efficiency() const noexcept { return cpu_info::efficiency( *this ); }
+		// brand string is special: while the index-method works with standard cpuid leafs,
+		// the brand string method on the other hand uses extended (negative) leafs.
+		// Thus: instantiate a CPUID query object instead of reading empty data.
+		std::string brand_string() const noexcept { return cpu_info::brand_string< CPUID >(); }
 
 	  protected:
 		void retrieve_all() noexcept
