@@ -48,11 +48,9 @@ namespace cpu_info
 	constexpr unsigned MAXIMUM_DOMAINS = 32;
 	constexpr unsigned MAX_PROCESSORS  = 1024; // not sure if this is necessary!
 
-	// data types and namespace inclusions
-	using namespace std;
-
-	using APIC_id = unsigned;
-	using id_mask = unsigned;
+	// data types
+	using APIC_id					   = unsigned;
+	using id_mask					   = unsigned;
 
 	/**
 	 * 	Result of a cpuid - instruction (simply 4 32bit registers)
@@ -67,7 +65,7 @@ namespace cpu_info
 	};
 	template < class AT >
 	concept cpuid_accessor = requires( const AT &accessor, unsigned leaf, unsigned subleaf ) {
-		{ accessor.operator()( leaf, subleaf ) } -> convertible_to< cpuid_result >;
+		{ accessor.operator()( leaf, subleaf ) } -> std::convertible_to< cpuid_result >;
 	};
 #pragma endregion
 
@@ -206,7 +204,7 @@ namespace cpu_info
 	// clang-format on
 	constexpr auto		  ext_index			   = 0x80000000u;
 	constexpr auto		  brand_string_support = 0x80000004u;
-	constexpr const char *brand_strings[]{
+	constexpr const char *brand_strings[]	   = {
 		"Intel® Celeron®",
 		"Intel® Pentium® III",
 		"Intel® Pentium® III Xeon®",
@@ -221,30 +219,14 @@ namespace cpu_info
 		"Intel® Celeron® M",
 	};
 	// some of Intel®'s strings were double-defined or reserved/empty. So this is a remapping:
-	constexpr unsigned			 brand_reindex[] = { 0x00, 0x01, 0x02, 0x01, 0,	   0x04, 0x05, 0x06,
-													 0x06, 0x00, 0x07, 0x08, 0,	   0x09, 0x05, 0,
-													 0x0a, 0x0b, 0x05, 0x00, 0x0a, 0x03, 0x05 };
-	/* CPUID LEAF INTERPRETATION DATA → unsupported/reserved leaf ids: */
-	static const set< unsigned > reserved{ 0x08, 0x0c, 0x0e, 0x11, 0x13, 0x21, 0x22, 0x25, 0x26 };
-	static const map< unsigned, unsigned > requirements{
-		// clang-format off
-		{ 0x09, 0x01000200u + 18 }, // This leaf is valid if CPUID.01H:ECX.DCA[18] = 1
-		{ 0x0d, 0x01000200u + 26 }, // This leaf is valid if CPUID.01H:ECX.XSAVE[26] = 1
-		{ 0x0f, 0x07000100u + 12 }, // This leaf is valid if CPUID.07H.00H:EBX.RDT_M[12] = 1
-		{ 0x10, 0x07000100u + 15 }, // This leaf is valid if CPUID.07H.00H:EBX.RDT_A[15] = 1
-		{ 0x12, 0x07000100u + 2 },	// This leaf is valid if CPUID.07H.00H:EBX.SGX[2]
-		{ 0x14, 0x07000100u + 25 }, // This leaf is valid if CPUID.07H.00H:EBX.INTEL_PROC_TRACE[25] = 1
-		{ 0x19, 0x07000200u + 23 }, // This leaf is valid if CPUID.07H.00H:ECX.KEY_LOCKER[23] = 1
-		{ 0x1b, 0x07000300u + 18 }, // This leaf is valid if CPUID.07H.00H:EDX.PCONFIG[18] = 1
-		{ 0x1c, 0x07000300u + 19 }, // This leaf is valid if CPUID.07H.00H:EDX.ARCH_LBRS[19] = 1
-		{ 0x1d, 0x07000300u + 24 }, // This leaf is valid if CPUID.07H.00H:EDX.AMX_TILE[24] = 1
-		{ 0x1e, 0x07000300u + 24 }, // This leaf is valid if CPUID.07H.00H:EDX.AMX_TILE[24] = 1
-		{ 0x20, 0x07010000u + 22 }, // This leaf is valid if CPUID.07H.01H:EAX.HRESET[22] = 1
-		{ 0x23, 0x07010000u + 8 }, // This leaf is valid if CPUID.07H.01H:EAX.ARCH_PERFMON_EXT[8] = 1
-		{ 0x24, 0x07010300u + 19 }, // This leaf is valid if CPUID.07H.01H:EDX.AVX10[19] = 1
-		{ 0x27, 0x07010200u + 0 },	// This leaf is valid if CPUID.07H.01H:ECX.RDT_M_ASYM[0] = 1
-		{ 0x28, 0x07010200u + 1 },	// This leaf is valid if CPUID.07H.01H:ECX.RDT_A_SYM[1] = 1
-	}; // clang-format on
+	constexpr unsigned brand_reindex[] = { 0x00, 0x01, 0x02, 0x01, 0,	 0x04, 0x05, 0x06,
+										   0x06, 0x00, 0x07, 0x08, 0,	 0x09, 0x05, 0,
+										   0x0a, 0x0b, 0x05, 0x00, 0x0a, 0x03, 0x05 };
+
+	// I found some more documentation about leaf 0x1a:
+	//	core native model ID
+	//		Atom 0=TNT, 1=GRM, 2=CRM, 3=SKM, 4=DKM, 5=ARW
+	//		Core 0=SNC, 1=GLC, 2=RWC, 3=LNC, 4=CGC, 5=CYC
 #pragma endregion
 
 #pragma region QUERY function templates accessing cpuid leafs through a templated function
@@ -252,6 +234,29 @@ namespace cpu_info
 	template < cpuid_accessor AT >
 	bool leaf_valid( unsigned leaf, const AT &at = {} ) noexcept
 	{
+		/* 	CPUID LEAF INTERPRETATION DATA (these need to be a set and a map - thus not constexpr …)
+			→ unsupported/reserved leaf ids: */
+		static const std::set< unsigned >			reserved{ 0x08, 0x0c, 0x0e, 0x11, 0x13,
+															  0x21, 0x22, 0x25, 0x26 };
+		static const std::map< unsigned, unsigned > requirements{
+			// clang-format off
+			{ 0x09, 0x01000200u + 18 }, // This leaf is valid if CPUID.01H:ECX.DCA[18] = 1
+			{ 0x0d, 0x01000200u + 26 }, // This leaf is valid if CPUID.01H:ECX.XSAVE[26] = 1
+			{ 0x0f, 0x07000100u + 12 }, // This leaf is valid if CPUID.07H.00H:EBX.RDT_M[12] = 1
+			{ 0x10, 0x07000100u + 15 }, // This leaf is valid if CPUID.07H.00H:EBX.RDT_A[15] = 1
+			{ 0x12, 0x07000100u + 2 },	// This leaf is valid if CPUID.07H.00H:EBX.SGX[2]
+			{ 0x14, 0x07000100u + 25 }, // This leaf is valid if CPUID.07H.00H:EBX.INTEL_PROC_TRACE[25] = 1
+			{ 0x19, 0x07000200u + 23 }, // This leaf is valid if CPUID.07H.00H:ECX.KEY_LOCKER[23] = 1
+			{ 0x1b, 0x07000300u + 18 }, // This leaf is valid if CPUID.07H.00H:EDX.PCONFIG[18] = 1
+			{ 0x1c, 0x07000300u + 19 }, // This leaf is valid if CPUID.07H.00H:EDX.ARCH_LBRS[19] = 1
+			{ 0x1d, 0x07000300u + 24 }, // This leaf is valid if CPUID.07H.00H:EDX.AMX_TILE[24] = 1
+			{ 0x1e, 0x07000300u + 24 }, // This leaf is valid if CPUID.07H.00H:EDX.AMX_TILE[24] = 1
+			{ 0x20, 0x07010000u + 22 }, // This leaf is valid if CPUID.07H.01H:EAX.HRESET[22] = 1
+			{ 0x23, 0x07010000u + 8 }, // This leaf is valid if CPUID.07H.01H:EAX.ARCH_PERFMON_EXT[8] = 1
+			{ 0x24, 0x07010300u + 19 }, // This leaf is valid if CPUID.07H.01H:EDX.AVX10[19] = 1
+			{ 0x27, 0x07010200u + 0 },	// This leaf is valid if CPUID.07H.01H:ECX.RDT_M_ASYM[0] = 1
+			{ 0x28, 0x07010200u + 1 },	// This leaf is valid if CPUID.07H.01H:ECX.RDT_A_SYM[1] = 1
+		}; // clang-format on
 		// pre-extra-info-tests:
 		if ( ( leaf <= at( 0, 0 ).e.ax ) && !reserved.contains( leaf ) )
 		{
@@ -399,9 +404,9 @@ namespace cpu_info
 	}
 
 	template < cpuid_accessor AT >
-	string brand_string( const AT &at = {} ) noexcept
+	std::string brand_string( const AT &at = {} ) noexcept
 	{
-		string result;
+		std::string result;
 		if ( const auto sup = at( ext_index, 0u ); sup.e.ax >= brand_string_support )
 		{ // use brand string method
 			result.resize( 4 * 4 * 3 + 1 );
@@ -409,9 +414,9 @@ namespace cpu_info
 			for ( auto s{ ext_index + 2 }; s <= brand_string_support; ++s )
 			{
 				const auto x = at( s, 0u );
-				for ( auto i: views::iota( 0, 4 ) ) *p++ = x.r[ i ];
+				for ( auto i: std::views::iota( 0, 4 ) ) *p++ = x.r[ i ];
 			}
-		} else if ( auto l1 = at( 1, 0 ); auto brand_index = min( 0x17u, l1.e.bx & 0xff ) )
+		} else if ( auto l1 = at( 1, 0 ); auto brand_index = std::min( 0x17u, l1.e.bx & 0xff ) )
 		{ // use middle-aged brand index method
 
 			unsigned mf	 = uint8_t( l1.e.ax >> 8 ) & 0b1111; // need only leaf 1 - so,
@@ -509,9 +514,9 @@ namespace cpu_info
 	 */
 	class affinity final
 	{
-		vector< bool > bit_mask;
-		unsigned	   group_id{ 0 };
-		unsigned	   pref_cpu{ numeric_limits< unsigned >::max() };
+		std::vector< bool > bit_mask;
+		unsigned			group_id{ 0 };
+		unsigned			pref_cpu{ std::numeric_limits< unsigned >::max() };
 #pragma region affinity - private OS-agnostic implementations
 #ifdef _WIN32
 		bool query() noexcept
@@ -532,11 +537,11 @@ namespace cpu_info
 			while ( pm ) bit_mask.push_back( pm & 1 ), pm >>= 1;
 			return result;
 		}
-		bool apply() noexcept
+		bool apply() const noexcept
 		{
 			GROUP_AFFINITY ga{};
 			ga.Group = group_id;
-			for ( auto b: views::reverse( bit_mask ) )
+			for ( auto b: std::views::reverse( bit_mask ) )
 				ga.Mask = ( KAFFINITY ) ( b | ( ga.Mask << 1 ) );
 			bool result = SetThreadGroupAffinity( GetCurrentThread(), &ga, nullptr );
 			if ( pref_cpu >= 0 ) SetThreadIdealProcessor( GetCurrentThread(), ( DWORD ) pref_cpu );
@@ -549,12 +554,13 @@ namespace cpu_info
 			cpu_set_t *set{ CPU_ALLOC( sz ) };
 			auto	   result = sched_getaffinity( getpid(), sz, set ) == 0;
 			bit_mask.clear();
-			for ( int n: views::iota( 0, sz ) ) bit_mask.push_back( CPU_ISSET_S( n, sz, set ) );
+			for ( int n: std::views::iota( 0, sz ) )
+				bit_mask.push_back( CPU_ISSET_S( n, sz, set ) );
 			CPU_FREE( set );
 			// i fear the linux cpu_set just has one group?
 			return result;
 		}
-		bool apply() noexcept
+		bool apply() const noexcept
 		{
 			int	  sz{ count() }, i{};
 			auto *s = CPU_ALLOC( sz );
@@ -576,7 +582,7 @@ namespace cpu_info
 			, pref_cpu( n )
 		{ bit_mask.push_back( true ); }
 		// inherit is to be used to copy from this, but select only one valid cpu
-		affinity inherit( unsigned single_cpu )
+		affinity inherit( unsigned single_cpu ) const noexcept
 		{ // e.g. group id from this, pref_cpu and mask from the other.
 			affinity result( single_cpu );
 			result.group_id = group_id;
@@ -589,13 +595,13 @@ namespace cpu_info
 				if ( b ) return true;
 			return false;
 		}
-		bool   empty() const noexcept { return !( *this ); }
+		bool		empty() const noexcept { return !( *this ); }
 		// return a string representation
-			   operator string() const noexcept { return to_string(); }
-		string to_string() const noexcept
+					operator std::string() const noexcept { return to_string(); }
+		std::string to_string() const noexcept
 		{
-			int	   i( count() );
-			string result( i, '-' );
+			int			i( count() );
+			std::string result( i, '-' );
 			for ( const auto &b: bit_mask ) result[ --i ] = b ? '+' : '-';
 			return result;
 		}
@@ -612,7 +618,7 @@ namespace cpu_info
 		affinity &read_current() noexcept { return query(), *this; }
 
 		// set current thread affinity! USE WITH CARE!
-		bool	  set_to_current() noexcept { return apply(); }
+		bool	  set_to_current() const noexcept { return apply(); }
 
 		// for single cpu-masks, this "shifts" the mask by one cpu and applies it
 		bool	  apply_next() noexcept
@@ -634,12 +640,12 @@ namespace cpu_info
 		}
 
 		affinity // operate on two sets producing another one.
-		op( const affinity &o, function< bool( bool, bool ) > operation ) const noexcept
+		op( const affinity &o, std::function< bool( bool, bool ) > operation ) const noexcept
 		{
 			affinity   res( *this );
-			const auto sm{ bit_mask.size() }, so{ o.bit_mask.size() }, sz{ max( sm, so ) };
+			const auto sm{ bit_mask.size() }, so{ o.bit_mask.size() }, sz{ std::max( sm, so ) };
 			res.bit_mask.resize( sz );
-			for ( auto i: views::iota( 0ul, bit_mask.size() ) )
+			for ( auto i: std::views::iota( 0ul, bit_mask.size() ) )
 				res.bit_mask[ i ] = operation( ( i >= sm ? false : bit_mask[ i ] ),
 											   ( i >= so ? false : o.bit_mask[ i ] ) );
 			return res;

@@ -8,32 +8,32 @@
  *
  *	only one CTor: (should default-CTor get deleted?)
  */
-#include <cpu_info.hpp>
+#include "cpu_info.hpp"
 
 #include <map>
 #include <ranges>
 
 namespace cpu_info
 {
-	class cpu_id : public map< unsigned, vector< cpuid_result > >
+	class cpu_id : public std::map< unsigned, std::vector< cpuid_result > >
 	{
 	  public:
-		using M = map< unsigned, vector< cpuid_result > >;
-		using L = vector< cpuid_result >;
+		using M = std::map< unsigned, std::vector< cpuid_result > >;
+		using L = std::vector< cpuid_result >;
 		using R = cpuid_result;
 
 		operator bool() const noexcept { return !M::empty(); }
-		explicit cpu_id( int cpu_number )
+		// CTor that does simply run all calls - CALLEE HAS TO SET AFFINITIES!
+		cpu_id()
 			: M()
-		{ // get current thread affinity, bind to cpu_number
+		{ retrieve_all(); }
+		// A specific CPU number is requested: takes care about affinity mask itself!
+		cpu_id( int cpu_number )
+			: M()
+		{
 			auto aff = affinity().read_current();
 			aff.inherit( cpu_number ).set_to_current();
-			// Read leaf 0, then emplace the rest
-			CPUID	   get;
-			const auto ml = emplace( 0u, L{ get( 0, 0 ) } ).first->second.front().e.ax;
-			// create the CPUID-LEAFS map:
-			for ( unsigned leaf: views::iota( 0u, ml ) )
-				if ( cpu_info::leaf_valid( leaf + 1, *this ) ) retrieve( leaf + 1, get );
+			retrieve_all();
 			// restore affinity
 			aff.set_to_current();
 		}
@@ -63,7 +63,7 @@ namespace cpu_info
 		id_mask domain_mask( cpu_domain domain ) const noexcept
 		{ return cpu_info::domain_mask( domain, *this ); }
 
-		APIC_id domain_id( cpu_domain domain ) const noexcept
+		APIC_id domain_id( cpu_domain domain = cpu_domain::LogicalDomain ) const noexcept
 		{ return cpu_info::apic_id( domain, *this ); }
 
 		bool operator()( cpu_feature feature ) const noexcept
@@ -75,10 +75,18 @@ namespace cpu_info
 		cpu_processor_type type() const noexcept { return cpu_info::type( *this ); }
 		cpu_core_type	   core_type() const noexcept { return cpu_info::core_type( *this ); }
 		unsigned		   core_model() const noexcept { return cpu_info::core_model( *this ); }
-		string			   brand_string() const noexcept { return cpu_info::brand_string( *this ); }
+		std::string		   brand_string() const noexcept { return cpu_info::brand_string( *this ); }
 		cpu_efficiency	   efficiency() const noexcept { return cpu_info::efficiency( *this ); }
 
 	  protected:
+		void retrieve_all() noexcept
+		{
+			CPUID	   get;
+			const auto ml = emplace( 0u, L{ get( 0, 0 ) } ).first->second.front().e.ax;
+			// create the CPUID-LEAFS map:
+			for ( unsigned leaf: std::views::iota( 0u, ml ) )
+				if ( cpu_info::leaf_valid( leaf + 1, *this ) ) retrieve( leaf + 1, get );
+		}
 		// After the Intel enumeration and special types, this is the other part of heavy lifting
 		// regarding the CPUID instruction:	Task at hand = "acquire one leaf and all its subleafs"
 		//	→	make sure, that leaf is present and NOT "reserved"
@@ -108,7 +116,7 @@ namespace cpu_info
 				case 0x20:
 				case 0x24:
 					if ( const auto &n = l->second.front().e.ax; n > 1u )
-						for ( unsigned s: views::iota( 1u, n ) )
+						for ( unsigned s: std::views::iota( 1u, n ) )
 							l->second.emplace_back( get( leaf, s ) );
 					break;
 				case 0x0a: // This leaf is valid if CPUID.0AH:EAX[7:0] (Version ID) > 0
@@ -126,7 +134,7 @@ namespace cpu_info
 						   // in CPUID.23H.00H.EAX[31:0]
 				case 0x27: // Sub-leaf n (n ≥ 1) is only valid when (CPUID.27H.00H:EDX[n] == 1).
 				case 0x28: // Sub-leaf n (n ≥ 1) is only valid when (CPUID.28H.00H:EBX[n] == 1).
-					for ( auto subleaf: views::iota( 1u, 31u ) )
+					for ( auto subleaf: std::views::iota( 1u, 31u ) )
 					{
 						const auto shifted = ( leaf == 0x27	  ? l->second.front().e.dx
 											   : leaf == 0x23 ? l->second.front().e.ax
