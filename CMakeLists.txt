@@ -15,13 +15,12 @@ include( CMakePackageConfigHelpers )
 set( CMAKE_CXX_STANDARD 23 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
-# create the library
+# prepare our library creation
 set( CPU_INFO_COMPONENTS "${CMAKE_CURRENT_SOURCE_DIR}/components" )
-add_subdirectory( components/cpu_info )
-add_subdirectory( components/cpu_id )
-add_subdirectory( components/cpu_topo )
-add_subdirectory( components/debugging )
-add_subdirectory( components/cmake )
+set( CPU_INFO_INSTALL_INCLUDES "${CMAKE_INSTALL_INCLUDEDIR}/cpu_info" )
+
+# create the library
+add_subdirectory( components )
 add_subdirectory( docs )
 
 set( DOCS README.md LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md )
