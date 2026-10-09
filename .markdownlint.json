@@ -115,9 +115,7 @@
     "html_elements": true
   },
   "MD045": true,
-  "MD046": {
-    "style": "consistent"
-  },
+  "MD046": false,
   "MD047": true,
   "MD048": {
     "style": "consistent"
