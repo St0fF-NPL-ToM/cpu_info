@@ -79,21 +79,22 @@ namespace cpu_info
 		// brand string is special: while the index-method works with standard cpuid leafs,
 		// the brand string method on the other hand uses extended (negative) leafs.
 		// Thus: instantiate a CPUID query object instead of reading empty data.
-		std::string brand_string() const noexcept { return cpu_info::brand_string< CPUID >(); }
+		std::string		   brand_string() const noexcept { return cpu_info::brand_string( *this ); }
 
 	  protected:
 		void retrieve_all() noexcept
 		{
-			CPUID	   get;
+			CPUID	   get; // a Reader-Accessor
 			const auto ml = emplace( 0u, L{ get( 0, 0 ) } ).first->second.front().e.ax;
 			// create the CPUID-LEAFS map:
 			for ( unsigned leaf: std::views::iota( 0u, ml ) )
 				if ( cpu_info::leaf_valid( leaf + 1, *this ) ) retrieve( leaf + 1, get );
+
 			// also, read the extended leafs - they all only provide subleaf #0
-			const auto el =
+			const auto en = // how many are there?
 				emplace( ext_index, L{ get( ext_index, 0 ) } ).first->second.front().e.ax;
-			for ( unsigned elid: std::views::iota( ext_index + 1u, el ) )
-				emplace( elid, L{ get( elid, 0 ) } );
+			for ( unsigned el: std::views::iota( ext_index + 1u, en ) )
+				emplace( el, L{ get( el, 0 ) } );
 		}
 		// After the Intel enumeration and special types, this is the other part of heavy lifting
 		// regarding the CPUID instruction:	Task at hand = "acquire one leaf and all its subleafs"
