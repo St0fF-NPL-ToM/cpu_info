@@ -1,6 +1,7 @@
 # cpu_info
 
-A small class for gathering CPU information, that may help finding answers about multithreading …
+A small c++ namespace for gathering CPU information,\
+that may help finding answers about multithreading …
 
 ---
 
@@ -8,13 +9,19 @@ A small class for gathering CPU information, that may help finding answers about
 
 When designing and creating multithreaded applications, you run into the same issues over and over.
 
-One issue might be: "spawning more worker threads than PHYSICAL cpu cores available introduces slow downs".
+One might be: "spawning more worker threads than PHYSICAL cpu cores available introduces slow downs".
 
 This actually is the most asked question in multithreading, at least of those questions I had to answer.
 
-On Intel-compatibles, for a decade, simple CPUid was sufficient on desktop systems.  The next decade went with a 3-level-option.  Nowadays, it is indeed a good thing [vendors like intel provide example code](https://github.com/intel/SDM-Processor-Topology-Enumeration) to find those answers deterministically.
+On Intel-compatibles, long time a simple CPUid-call and some logics was sufficient on desktop systems. But as CPUs got more and more complex, the output of CPUID got more complex, too.
+Therefore, it is indeed a good thing [vendors like intel provide example code](https://github.com/intel/SDM-Processor-Topology-Enumeration) to find those answers deterministically.
 
-Now, there is CPP20 and CPP23 with a lot of multithreading-helpers.  But it doesn't go as deep as affinity selection.  In other words: we get the playthings to create, but have to wait for those other playthings to optimize.
+There are tons of tools to "show off" all your CPU capabilities on screen,\
+but a real
+
+    "can I do this ?"-class
+
+I have not yet come across - this is `cpu_info`.
 
 ---
 
@@ -28,45 +35,39 @@ Please also have a look at the [docs folder](docs/overview.md).
 
 ***cpu_info:***
 
+- source file `cpu_info.hpp`
 - declares `cpu_info` namespace,
-- and implements the cpu_topo class
-
-***cpu_enums_intel:*** … what that name says …
-
-- declares X-macros: `CPU_FEATURES`, `CPU_DOMAINS`, `PROCESSOR_TYPE`, `CORE_TYPE`, `EFFICIENCY_TYPE`
-- and respective bitfields / enumerations:
-  - `cpu_feature` + accessor functions
-  - `cpu_domain`, `cpu_processor_type`, `cpu_core_type`, `cpu_efficiency`
+  - declares a lot of Intel-defined constants (in the form of X-macros):
+    - `CPU_FEATURES`, `CPU_DOMAINS`, `PROCESSOR_TYPE`, `CORE_TYPE`, `EFFICIENCY_TYPE`
+  - and respective bitfields / enumerations:
+    - `cpu_feature` + accessor functions
+    - `cpu_domain`, `cpu_processor_type`, `cpu_core_type`, `cpu_efficiency`
+  - a concept for sourcing cpuid-results (so the instruction needs not be called if the result is already known)
+  - template functions to acquire information from cpuid-results
+  - the "call cpuid to get a result" - accessor structure implementing the CPUID instruction call
+  - for restricting the current thread to a specific core and restoring affinity afterwards:
+    - classes `affinity`, `affinity_iterator`, `affinity_lock`\
+    → `affinity` encapsulates a process affinity and the ability to query, change and apply it to the current thread\
+    → `affinity_iterator` simply binds to cpu #0 on construction, iterates until done, restores original affinity\
+    → `affinity_lock` locks to a specific cpu number until destroyed (restores original affinity on destroy)
 
 ***cpu_id:***
 
-- declares the `cpu_id` class:
-  - public static member `cpuid( leaf, subleaf )` implements the `cpuid`-call (Windows/Linux)
-- is a map of "all info of a single logical core we may get"
-- contains specific query functions taylored to cpuid leafs
+- declares the `cpu_id` class - a `std::map` of "all info of a single logical core we may get"
+- instantiates the template functions of `cpu_info` as member accessor functions
   - using `cpu_enums`, features, type, model, etc. can be queried
 
-***cpu_set:***
+***cpu_topo:***
 
-- for managing task cpu affinities, this class tries to abstract over the respective platform interfaces:
-  - linux: scheduler-interface via `cpu_set_t`
-  - windows: processthreadsapi.h, processtopologyapi.h
-- can query the system for current process affinity (default CTor operation)
-- can be sat up empty or containing one single cpu number (Attn.: not apic_id!)
-- provides operators:
-  - join / intersect / dissect sets
-  - add / remove cpus
-- and last but not least: `applyToCurrentThread()` - which sets up the stored affinity mask for the current thread.
-
-***cpu_info_types:***
-
-- provides a few helper structs, types, and classes to ease some of the algorithms involved.
+- declares the cpu_topo class - as a `std::vector` of all `cpu_id`s on the system
+  - uses the `affinity_iterator` during refresh to parse the whole topology
+  - delivers answers like "how many physical cores do exist?" (counting the different domains of this topology)
+  - or "does this cpu have a hybrid architecture, and if so, which core is of which type?"
+    - which can already be queried with the namespace only, but as `cpu_topo` gathers a list of all `cpu_id`s, it operates on present data and is thus better suited for repeated tasks, like controlling a thread pool
 
 ### Future
 
-Now, with `cpu_set` and the efficiency features, thinkable stuff is using the `cpu_topo` as the management basis of a more complex application thread pool …
-
-Also, the number of files steadily grew.  So another option would be to crunch it down into one header-only library.  Would make linking obsolete and ease usage even more.
+The close future is: as soon as the API is stable, there will be a 0.5 version bump with a first "complete" release.
 
 ---
 
@@ -86,27 +87,21 @@ FetchContent_declare( cpu_info
     GIT_TAG development-0.0.3                                     # please choose appropriately
     GIT_SHALLOW on
     FIND_PACKAGE_ARGS PATHS ~/.local/lib64/cmake                  # local linux user install paths
-                                                                  # very helpful for building locally!
+                      COMPONENTS cpu_info cpu_id cpu_topo         # very helpful for building locally!
 )
 FetchContent_makeAvailable( cpu_info )
 ```
 
 > Note: this is only a guess, but steadily using e.g. `C:\Users\${user}\AppData\local` for your local Windows build's `CMAKE_INSTALL_PREFIX` may open up the same option on Windows systems!
 
-- in *any other buildsystem* you may want to import cpu_info's source files into your source tree (currently):
-  - cpu_info.h / cpp
-  - cpu_info_types.hpp
-  - cpu_enums_intel.h
-  - cpu_id.h / cpp
-  - cpu_set.hpp
+- The ANY OTHER WAY is simple: there are 3 header-only files, get those you need into your buildtree.
 
 > NOTES:
 >
-> - c++20 is required for compilation
-> - nomenclature: if a cpp-header is self-contained, it shall be marked as a cpp header using ".hpp" extension\
->   <ins>note the special case</ins> "enums_intel": it serves as a traditional Header only declaring enumerations and X-macros, which does not produce any code, yet. This cannot be self-contained, as it is "nothing".
+> - c++23 is required for compilation
+> - nomenclature: if a cpp-header is self-contained (e.g. no TU needed), it shall be marked as a cpp header using ".hpp" extension
+>   - obviously, this was achieved with cpu_info …
 > - file amount / source structure may change without notice
->
 
 ---
 
@@ -140,5 +135,5 @@ For further information, please consult the code itself and the [docs folder](do
 
 ## Example(s)
 
-Please activate `cpu_info_example` in your CMake Cache after cloning the source repository.
-A simple example command line tool running on linux and Windows is included.
+Please activate `CPU_INFO_BUILD_EXAMPLES` in your CMake Cache after cloning the source repository.
+A simple example command line tool running on linux and Windows is included for all 3 depths of the library.
