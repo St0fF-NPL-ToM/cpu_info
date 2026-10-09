@@ -16,7 +16,7 @@ set( CMAKE_CXX_STANDARD 23 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
 # prepare our library creation
-set( CPU_INFO_INSTALL_INCLUDES "${CMAKE_INSTALL_INCLUDEDIR}/cpu_info" )
+cmake_path( APPEND CMAKE_INSTALL_INCLUDEDIR cpu_info )
 
 # create the library
 add_subdirectory( source )
