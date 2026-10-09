@@ -19,3 +19,8 @@ install( FILES
 	${CMAKE_CURRENT_BINARY_DIR}/cpu_infoConfig.cmake
 	${CMAKE_CURRENT_BINARY_DIR}/cpu_infoConfigVersion.cmake
 	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cpu_info )
+
+target_sources( cpu_info PRIVATE 
+	FILE_SET 02_CMAKE TYPE HEADERS
+	FILES cpu_info.cmake.in
+)

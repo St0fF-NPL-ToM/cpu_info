@@ -16,26 +16,36 @@ set( CMAKE_CXX_STANDARD 23 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
 # prepare our library creation
-set( CPU_INFO_COMPONENTS "${CMAKE_CURRENT_SOURCE_DIR}/components" )
 set( CPU_INFO_INSTALL_INCLUDES "${CMAKE_INSTALL_INCLUDEDIR}/cpu_info" )
 
 # create the library
-add_subdirectory( components )
+add_subdirectory( source )
+add_subdirectory( cmake )
 add_subdirectory( docs )
+add_subdirectory( debugging )
 
 set( DOCS README.md LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md )
-target_sources( cpu_info PRIVATE ${DOCS} )
+target_sources( cpu_info PRIVATE FILE_SET 04_DOCUMENTATION FILES ${DOCS} )
 
-option( CPUINFO_BUILD_EXAMPLES "build the examples?" off )
-if ( CPUINFO_BUILD_EXAMPLES )
+source_group( 00_sources REGULAR_EXPRESSION ".*((h)|(c(pp)|(xx)))" )
+source_group( 01_library REGULAR_EXPRESSION ".*hpp" )
+source_group( 02_cmake REGULAR_EXPRESSION ".*cmake[.]in" )
+source_group( 03_debugging REGULAR_EXPRESSION ".*((natvis)|(lldb)|(py))" )
+source_group( 04_documentation REGULAR_EXPRESSION ".*((m?md)|(LICENSE))" )
+
+option( CPU_INFO_BUILD_EXAMPLES "build the examples?" off )
+if ( CPU_INFO_BUILD_EXAMPLES )
     add_subdirectory( examples )
 endif()
 
-install( TARGETS cpu_info cpu_id cpu_topo EXPORT cpu_infoTargets
+install( TARGETS cpu_info EXPORT cpu_infoTargets
 	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-	INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} )
+	INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+	FILE_SET 01_SOURCE_HEADERS
+	FILE_SET 03_DEBUGGING
+)
 install( EXPORT cpu_infoTargets FILE cpu_infoTargets.cmake NAMESPACE cpu_info::
 	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cpu_info )
 # Buildtree-Export
