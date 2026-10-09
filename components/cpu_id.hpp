@@ -89,6 +89,11 @@ namespace cpu_info
 			// create the CPUID-LEAFS map:
 			for ( unsigned leaf: std::views::iota( 0u, ml ) )
 				if ( cpu_info::leaf_valid( leaf + 1, *this ) ) retrieve( leaf + 1, get );
+			// also, read the extended leafs - they all only provide subleaf #0
+			const auto el =
+				emplace( ext_index, L{ get( ext_index, 0 ) } ).first->second.front().e.ax;
+			for ( unsigned elid: std::views::iota( ext_index + 1u, el ) )
+				emplace( ext_index + elid, L{ get( ext_index + elid, 0 ) } );
 		}
 		// After the Intel enumeration and special types, this is the other part of heavy lifting
 		// regarding the CPUID instruction:	Task at hand = "acquire one leaf and all its subleafs"
