@@ -82,6 +82,7 @@ namespace cpu_info
 		std::string		   brand_string() const noexcept { return cpu_info::brand_string( *this ); }
 
 	  protected:
+		using M::operator[];	// hide the emplacing access operator!
 		void retrieve_all() noexcept
 		{
 			CPUID	   get; // a Reader-Accessor

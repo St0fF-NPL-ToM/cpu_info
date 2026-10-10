@@ -15,7 +15,6 @@ The intention: to be able to easily provide a string table of any kind for names
 | [`cpu_core_type`](#cpu_setcpu_core_type) | CORE_TYPE | NAME, MASK_VALUE | A 6 bit mask, where only 2 values are really useful: `Core` and `Atom` (other values should never be encountered, or treated as "reserved, invalid") |
 | [`cpu_efficiency`](#cpu_infocpu_efficiency) | EFFICIENCY_TYPE | NAME, VALUE | Translation of `cpu_core_type` into its actual meaning |
 | [`cpu_processor_type`](#cpu_setcpu_processor_type) | PROCESSOR_TYPE | NAME | not really of importance anymore, a relatively old cpuid-bitmask containing `OEM_processor`, `IntelOverDrive`, `Dual_processor`, … |
-| [`cpu_set::init_type`](#cpu_setinit_type) | none defined | … | Cookie-type to control parameter-less cpu_set constructor behaviour. |
 
 Starting out with the easy ones …
 
@@ -30,26 +29,6 @@ Describes the view of a single logical core on itself.
 - `unknownEff`: 0
 - `effficient`: 1
 - `performant`: 2
-
----
-
-## cpu_set::init_type
-
-This enum is only used in the `cpu_set::cpu_set( init_type )`-constructor.
-
-A "No parameter"-CTor (i.e. "default") can only be implemented once. But I needed a 2nd parameter-less CTor for the class to produce an empty set.\
-On such occasions, modern C++ should introduce a "cookie-type" (or "key type") to control behaviour:
-
-**Values:**
-
-- `empty`: create an empty set
-- `process`: create a set from querying current process' state
-
-Thus, the default "parameterless" CTor will query the current process affinity, while a call to `cpu_set::cpu_set( init_type::empty )` will indeed return an empty set.
-
-> ***ATTENTION:*** on Windows, an application is bound to a single cpu group, unless explicitly configured differently.  Most desktop systems have only one cpu group, but in case there were more, this group id is necessary!
->
-> Thus, the "create empty set" CTor call will also query the system on Windows. It keeps the group id and discards the process affinity mask.
 
 ---
 
@@ -77,7 +56,9 @@ In any other senseful scenarios, please use the `cpu_efficiency` enumeration ins
 
 ## cpu_set::cpu_processor_type
 
-This enum represents values directly taken out of cpuid.  The values seem purely informational.
+This enum represents values directly taken out of cpuid.  The values seem purely informational:
+
+    #define PROCESSOR_TYPE( X )	X( OEM_processor ) X( IntelOverDrive ) X( Dual_processor ) X( Intel_reserved )
 
 If you like, please use the X-macro for creating an output string list and output as you wish.
 
@@ -91,7 +72,15 @@ If you like, please use the X-macro for creating an output string list and outpu
 
 ## cpu_info::cpu_domain
 
-This value is predefined by Intel® to contain the different levels of cpu core hierarchy.
+This value is predefined by Intel® to contain the different levels of cpu core hierarchy:
+
+- InvalidDomain = 0
+- LogicalDomain = 1
+- CoreDomain …
+- ModuleDomain
+- TileDomain
+- DieDomain
+- DieGrpDomain
 
 It is used to determine the topology in `cpu_topo`.
 
@@ -124,7 +113,7 @@ This enum is an exhaustive conglomeration of Intel®-defined bits of cpu feature
 Internally, its numeric value is decomposed to look up the current state inside the cpuid-leafs and subleafs.
 
 So its main purpose is querying, if a specific core supports a specific feature.
-> Indeed, features may differ between cores on a physical die or package!
+> !ATTN: Indeed, features may differ between cores on a physical die or package!
 
 ### hints on using the X-macro
 

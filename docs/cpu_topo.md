@@ -23,7 +23,7 @@ The overall question just being: how can I spread different kinds of tasks optim
 
 Therefore the `cpu_topo` constructor does the following things in order:
 
-- queries the active `cpu_set` of the process (e.g. current affinity mask)
+- queries the active `affinity` of the process
 - calls `refresh()`:
   - queries the logical cpu count
   - in a loop: binds the calling thread to each logical core and obtains all cpuid leafs at once
@@ -45,7 +45,7 @@ After creation, this class serves as an informational container.
 The members are:
 
 ```cpp
-    const cpu_set       process_affinity;   // contains the first queried (i.e. orignal) process affinity
+    const affinity       process_affinity;   // contains the first queried (i.e. orignal) process affinity
     vector< cpu_id >    cpu_ids;            // the vector of `cpu_id` entries for each logical cpu (numerical
                                             // (non-apic-id) ID of each core is its index into the vector)
     vector< map< apic_id, int > >

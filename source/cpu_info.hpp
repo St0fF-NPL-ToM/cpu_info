@@ -682,6 +682,8 @@ namespace cpu_info
 		affinity base, curr;
 
 	  public:
+		affinity_iterator( const affinity_iterator & )			  = delete;
+		affinity_iterator &operator=( const affinity_iterator & ) = delete;
 		affinity_iterator() { base.read_current(), ( curr = base.inherit( 0 ) ).set_to_current(); }
 		// in case the main thread was mistakenly not reset, it will be done upon leave.
 		~affinity_iterator() { base.set_to_current(); }

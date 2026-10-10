@@ -18,14 +18,14 @@ To achieve its targets, there are some prerequisites:
 - [cpuid command and result type](#cpuid-command-and-result-type)
 - [further support data types](#further-support-data-types)
 - [cpu\_id internals](#cpu_id-internals)
-	- [base design explanation](#base-design-explanation)
-	- [explicit base overwrites](#explicit-base-overwrites)
-	- [What is max\_leaf() ?](#what-is-max_leaf-)
-	- [What is id\_leaf() ?](#what-is-id_leaf-)
-	- [`apic_id` by `cpu_domain`?](#apic_id-by-cpu_domain)
-	- [further query functionality](#further-query-functionality)
-		- [`core_model()`?](#core_model)
-		- [`brand_string()`?](#brand_string)
+  - [base design explanation](#base-design-explanation)
+  - [explicit base overwrites - modifications](#explicit-base-overwrites--modifications)
+  - [What is max\_leaf() ?](#what-is-max_leaf-)
+  - [What is id\_leaf() ?](#what-is-id_leaf-)
+  - [`APIC_id` by `cpu_domain`?](#APIC_id-by-cpu_domain)
+  - [further query functionality](#further-query-functionality)
+    - [`core_model()`?](#core_model)
+    - [`brand_string()`?](#brand_string)
 - [even further?](#even-further)
 
 ---
@@ -47,23 +47,59 @@ To allow access in a way that better complies with the register names returned, 
 	};
 ```
 
-Which in turn is the result type of the platform-independent call found as a static member function to `cpu_id`:
+Which in turn is the result type of the platform-independent call:
 
 ```cpp
 	static cpuid_result cpuid( unsigned Leaf, unsigned Subleaf ) noexcept;
 ```
 
-## further support data types
+### where's the catch?
+
+The catch is: depth of library use.  Maybe a user doesn't need all information - only the efficiency would suffice.  It wouldn't be good in that case, if the compiler produced all the available code...
+
+Analysing this scenario:
+
+- query functions work with `cpuid_results` by retrieving further leafs if necessary
+- they call a function to receive a required leaf/subleaf
+- this means: the `producer` of the result is free to be anything!
+
+… leads to a simple solution:
+
+- declare a "cpuid_accessor" requirement concept
+
+```cpp
+	template < class AT >
+	concept cpuid_accessor = requires( const AT &accessor, unsigned leaf, unsigned subleaf ) {
+		{ accessor.operator()( leaf, subleaf ) } -> std::convertible_to< cpuid_result >;
+	};
+```
+
+- declare all query functionality templated based on that concept
+
+```cpp
+	template < class AT >
+	ResultType function_name( <parameters…>, const AT& accessor_to_use );
+```
+
+- produce a simple struct meeting this requirement and implementing the actual cpu id instruction
+  - userspace may instantiate this struct and materialize only those query functions needed by specializing the template at the call site
+  - see `cpu_info_example`, which uses this approach
+- be free to produce any other classes meeting this concept's requirement …
+  - which is, what `cpu_id` is doing
+
+### further support data types
 
 When there are many "ID"s in play, one may get confused quite quickly.
 
 Thus, some explicit typing was used to clarify the respective functionalities:
 
 ```cpp
-	using apic_id = unsigned;
+	using APIC_id = unsigned;
 	using id_mask = unsigned;
-	using id_list = vector< apic_id >;
+	using id_list = std::vector< APIC_id >;
 ```
+
+---
 
 ## cpu_id internals
 
@@ -79,49 +115,24 @@ Sparsely filled lists are nothing to easily work with, that's why associative ar
 
 Subleafs on the other hand - in case more than subleaf 0 exists - are continuous, thus a vector of subleafs is sufficient.
 
-By choosing this base to derive from, most management tasks just vanished, as they are inherited.
+**By choosing this base to derive from, most management tasks just vanished, as they are simply inherited.**
 
 Respectively, subtypes are declared (internally, prepend `cpu_id::` upon use) as:
 
 ```cpp
-	using M = map< unsigned, vector< cpuid_result > >;
-	using L = vector< cpuid_result >;
+	using M = std::map< unsigned, std::vector< cpuid_result > >;
+	using L = std::vector< cpuid_result >;
 ```
 
 ---
 
-### explicit base overwrites
+### explicit base overwrites / modifications
 
-You will find the following lines in the source:
+The default behaviour of `std::map` upon using the `operator[]`:
 
-```cpp
-	cpu_topo::L& cpu_topo::operator[]( unsigned leaf ) noexcept
-	{
-		if ( contains( leaf ) ) return M::operator[]( leaf );
-		else return _invalid;
-	}
-```
+- default-create Value for queried Key, in case Key did not yet exist in the map
 
-… as well as a const version of that operator.
-
-This explicitly overwrites the `std::map`'s default behaviour upon using the `operator[]`: in case the key does not exist inside the map, it will be created and a non-const reference to this key's default-created value be returned.
-
-This behaviour is not intended, here.  As a `value` of this map is a `std::vector` - return empty is the simplest option.
-
-Anyhow, as a reference is returned, there has to be a static L instance as returned reference.
-
-… simply hoping the user checks for emptiness instead of using it right away.
-
-> In case somebody explains to me if it is possible to also provide non-noexcept variations, I'd go for an implementation.\
-> In general I dislike the overhead of exception handling, thus I like to NOT put the user of my code into a situation, where a try-catch block was required.
-
-You may as well see inside the code, that I also prefer to ***never early out***.\
-Instead, every nesting level simply needs to "be there".
-
-  This is **`honesty in coding`**.
-
-Upon adding functionality to any function it makes you **NOT** *forget or oversee* those cases,\
-that otherwise would have been early-outs.
+This behaviour is not intended, here.  As a `value` of this map is a `std::vector` and cpu_id "knows" which `Key`s may be valid, this access operator was simply made `protected`, so it cannot be called from outside the class.
 
 ---
 
@@ -144,16 +155,16 @@ Possible values:
 
 ---
 
-### `apic_id` by `cpu_domain`?
+### `APIC_id` by `cpu_domain`?
 
-Every logical cpu core gets a unique apic_id during system startup / cpu-hotplug.
+Every logical cpu core gets a unique APIC_id during system startup / cpu-hotplug.
 
-Casting the `cpu_id` object to an `apic_id` invokes the respective operator, returning the system unique apic-id this object describes.
+Casting the `cpu_id` object to an `APIC_id` invokes the respective operator, returning the system unique apic-id describing this object.
 
-Depending on the viewing perspective (e.g. which `cpu_domain`), a single core has different `apic_id`s, some of which are shared with other cores (internal grouping), but the `LogicalDomain` id is this logical cpu core's system-unique `apic_id`.
+Depending on the viewing perspective (e.g. which `cpu_domain`), a single core has different `APIC_id`s, some of which are shared with other cores (internal grouping), but the `LogicalDomain` id is this logical cpu core's system-unique `APIC_id`.
 
 ```cpp
-	apic_id            masked_id( cpu_domain domain ) const noexcept;
+	APIC_id            masked_id( cpu_domain domain ) const noexcept;
 ```
 
 The returned values are generated by domain masking and domain shifting:
