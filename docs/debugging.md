@@ -28,11 +28,11 @@ The `cpu_info.natvis` file does a great job debugging under windows, as it uses 
 
 Sadly, I did not find the patience to also look for the glibc-natvis-implementation, which I suspect to be existing somehow, but couldn't find in due time.
 
-Some tries were taken to produce valid Linux and Windows output where this works out fine. For example `cpu_set` and `cpuid_result` get displayed nicely on both systems.
+Some tries were taken to produce valid Linux and Windows output where this works out fine. Sadly, looks like we have to live with standard debugging output.
 
 ## .lldb and .py
 
-I wanted to check out, what it costs to produce better usable output using lldb.  The result is inside `cpu_info.lldb`.
+I wanted to check out, what it costs to produce better usable output using lldb.  The result is inside `cpu_info.lldb`.  It's rather nothing …
 
 As already stated, no more efforts were taken, thus the `cpu_info-lldb.py` file is empty.
 

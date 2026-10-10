@@ -6,13 +6,11 @@
 	</Type>
 
 	<Type Name="cpu_info::apicid_bit_layout">
-		<DisplayString>{domain} → {shift,d}, {relative_masks}</DisplayString>
+		<DisplayString>{domain} =&gt; {shift,d}, {relative_masks}</DisplayString>
 	</Type>
 
-	<Type Name="cpu_info::cpu_set">
-		<!-- ATTN: this class uses "#include <natvis.h>" to create a const "msvc" member -->
-		<DisplayString Condition="(msvc == true)" Optional="true">{ga.Group,d}:{ga.Mask,x},{sysAffinity,x}</DisplayString>
-		<DisplayString Optional="true">{sz,d}:{set,x}</DisplayString>
+	<Type Name="cpu_info::affinity">
+		<DisplayString>Grp:{group_id,x}, Pref:{pref_cpu,x}, Mask:</DisplayString>
 	</Type>
 
 	<Type Name="cpu_info::cpu_topo">

@@ -48,8 +48,13 @@ namespace cpu_info
 			return {};
 		}
 		// accessor to meet the requirement to use the template functions from cpu_info
-		R		 operator()( unsigned l, unsigned s ) const noexcept { return at( l, s ); }
-
+		R operator()( unsigned l, unsigned s ) const noexcept { return at( l, s ); }
+		// overwrite default map index operator with this const version
+		L operator[]( unsigned leaf ) const noexcept
+		{
+			if ( contains( leaf ) ) return M::at( leaf );
+			else return {};
+		}
 		// Informational functionality following …
 		unsigned max_leaf() const noexcept { return ( *this ? at( 0, 0 ).e.ax : 0u ); }
 		unsigned id_leaf() const noexcept { return cpu_info::id_leaf( *this ); }
@@ -82,7 +87,6 @@ namespace cpu_info
 		std::string		   brand_string() const noexcept { return cpu_info::brand_string( *this ); }
 
 	  protected:
-		using M::operator[];	// hide the emplacing access operator!
 		void retrieve_all() noexcept
 		{
 			CPUID	   get; // a Reader-Accessor
