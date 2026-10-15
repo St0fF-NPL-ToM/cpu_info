@@ -1,54 +1,80 @@
+---
+references:
+  - "File: /source/cpu_info.hpp"
+  - "File: /source/cpu_id.hpp"
+  - "File: /source/cpu_topo.hpp"
+generationTime: 2026-10-15T19:22:30.444Z
+---
 classDiagram
-    class cpu_topo {
-        +affinity process_affinity
-        +Vector~cpu_id~ cpu_ids
-        +Vector~ApicIdCountMap~ lvl_ids
-        +count() size_t
-        +max_domain() cpu_domain
-        +count_domain(cpu_domain lvl) size_t
-        +operator[]( size_t index ) cpu_id
-        +parse_topology() void
-        +refresh() void
+    class cpuid_accessor {
+        <<interface>>
+        +operator()(unsigned leaf, unsigned subleaf) cpuid_result
     }
 
-    class cpu_id {
-        +at( unsigned leaf, unsigned subleaf ) cpuid_result
-        +max_leaf() unsigned
-        +id_leaf() unsigned
-        +operator APIC_id() APIC_id
-        +domain_id(domain) APIC_id
-        +operator()(feature) bool
-        +brand_string() string
-        +efficiency() cpu_efficiency
-        #retrieve_all()
-        #retrieve(leaf) CpuidResultList
-    }
-
-    class affinity {
-        -std::vector< bool > bit_mask
-        -unsigned group_id
-        -unsigned pref_cpu
-        +inherit( unsigned single_cpu ) affinity
-        +operator bool()
-        +empty() bool
-        +to_string() string
-        +count_enabled() size_t
-        +read_current()
-        +set_to_current() bool
-        +apply_next() bool
-        +operator|(affinity) affinity
-        +operator&(affinity) affinity
-        +operator^(affinity) affinity
-        +operator+=(int) affinity
+    class CPUID {
+        +operator()(unsigned Leaf, unsigned Subleaf) cpuid_result
     }
 
     class cpuid_result {
-        <<union>>
-        +unsigned r
-        +unsigned ax
-        +unsigned bx
-        +unsigned cx
-        +unsigned dx
+        <<datatype>>
+        +unsigned int r[4]
+        +unsigned int ax
+        +unsigned int bx
+        +unsigned int cx
+        +unsigned int dx
+    }
+
+    class affinity {
+        -vector~bool~ bit_mask
+        -unsigned group_id
+        -unsigned pref_cpu
+        +read_current() affinity
+        +set_to_current() bool
+        +apply_next() bool
+        +count_enabled() size_t
+        +to_string() string
+    }
+
+    class affinity_iterator {
+        -affinity base
+        -affinity curr
+        +operator++() bool
+    }
+
+    class affinity_lock {
+        -affinity original
+        +affinity_lock(int cpu_number)
+    }
+
+    class std_map {
+        <<external>>
+    }
+
+    class cpu_id {
+        +at(unsigned leaf, unsigned subleaf) cpuid_result
+        +max_leaf() unsigned
+        +id_leaf() unsigned
+        +domain_id(cpu_domain domain) APIC_id
+        +operator()(cpu_feature feature) bool
+        +family() uint8_t
+        +model() uint8_t
+        +brand_string() string
+        #retrieve_all() void
+        #retrieve(unsigned leaf, CPUID get) void
+    }
+
+    class cpu_topo {
+        +affinity process_affinity
+        +vector~cpu_id~ cpu_ids
+        +count() size_t
+        +max_domain() cpu_domain
+        +count_domain(cpu_domain lvl) size_t
+        +refresh() void
+        -parse_topology() void
+    }
+
+    class mask_map {
+        +operator[](unsigned key) id_mask
     }
 
     class apicid_bit_layout {
@@ -62,27 +88,6 @@ classDiagram
         +domains() unsigned
     }
 
-    class mask_map {
-        +operator[](key) id_mask
-    }
-
-    class Map {
-        <<external STL base>>
-    }
-
-    class Vector {
-        <<external STL base>>
-    }
-
-    class cpu_feature {
-        <<enumeration>>
-        SSE3
-        AVX
-        AVX2
-        AVX512F
-        AMX_TILE
-    }
-
     class cpu_domain {
         <<enumeration>>
         InvalidDomain
@@ -92,6 +97,18 @@ classDiagram
         TileDomain
         DieDomain
         DieGrpDomain
+    }
+
+    class cpu_feature {
+        <<enumeration>>
+        Intel CPUID feature flags
+    }
+
+    class cpu_efficiency {
+        <<enumeration>>
+        unknownEff
+        effficient
+        performant
     }
 
     class cpu_processor_type {
@@ -111,32 +128,15 @@ classDiagram
         CoreI
     }
 
-    class cpu_efficiency {
-        <<enumeration>>
-        unknownEff
-        effficient
-        performant
-    }
-
-    class ApicIdCountMap {
-        <<container type>>
-    }
-
-    class CpuidResultList {
-        <<container type>>
-    }
-
-    Map <|-- cpu_id
-    Map <|-- mask_map
-    Vector <|-- apicid_bit_layouts
-    cpu_topo "1" *-- "1" affinity : process affinity
-    cpu_topo "1" *-- "0..*" cpu_id : CPU records
-    cpu_topo --> ApicIdCountMap : lvl_ids
-    apicid_bit_layout *-- mask_map : relative masks
-    cpu_id --> CpuidResultList : leaf results
-    cpu_id --> cpuid_result : CPUID data
-    cpu_topo --> cpu_domain
-    cpu_id --> cpu_feature
-    cpu_id --> cpu_efficiency
-    cpu_id --> cpu_processor_type
-    cpu_id --> cpu_core_type
+    std_map <|-- cpu_id
+    cpuid_accessor <|.. CPUID
+    cpuid_accessor <|.. cpu_id
+    cpu_topo "1" *-- "*" cpu_id : stores
+    affinity_iterator *-- affinity : base and current masks
+    affinity_lock *-- affinity : saves original mask
+    cpu_topo ..> affinity_iterator : scans CPUs
+    cpu_topo ..> apicid_bit_layouts : parses topology
+    apicid_bit_layouts *-- apicid_bit_layout : contains
+    apicid_bit_layout *-- mask_map : stores masks
+    cpu_id ..> cpu_domain : reports topology
+    cpu_id ..> cpu_feature : checks flags
