@@ -149,7 +149,7 @@ The other path is much easier. Instancing a `std::move_only_function` from a `st
 #### pool design - storage
 
 - `std::vector< std::jthread >` - worker thread (consumer) instances …
-- `std::stop_source` - bound to all workers, for graceful shutdown during destruction
+- `std::stop_source` - used by all workers, for graceful shutdown during destruction
 - `std::mutex` + `std::condition_variable` - communication between pool and consumers
 - `std::queue< std::move_only_function< void() > >` - Pool of active tasks to be "pulled" by consumer threads.
 - `std::map` [(see group storage)](#group-storage)

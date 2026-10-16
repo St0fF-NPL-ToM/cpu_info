@@ -44,6 +44,10 @@
 #include <future>
 #include <thread>
 #include <functional>
+#ifdef CPU_INFO_POOL_LOG
+	#include <sstream>
+	#include <iostream>
+#endif
 
 namespace cpu_info
 {
@@ -57,44 +61,85 @@ namespace cpu_info
 		// private internal data
 		group_map										groups;
 		std::stop_source								stop;
-		mutable std::recursive_mutex					mutex;
-		std::condition_variable							notifier;
+		mutable std::mutex								mutex;
+		std::condition_variable_any						notifier;
 		std::queue< std::move_only_function< void() > > queue;
 		std::vector< std::jthread >						p00l;
-		int												free{}, active{};
+		int												idle{}, busy{};
+#ifdef CPU_INFO_POOL_LOG
+		std::ostringstream					  log{};
+		std::chrono::system_clock::time_point init;
 
+		template < typename... A >
+		void l( A&&... a ) noexcept
+		{
+			( ( log << std::format( "[{}] ", ( std::chrono::system_clock::now() - init ).count() ) )
+			  << ... << a )
+				<< std::endl;
+		}
+		template < typename... A >
+		void sl( A&&... a ) noexcept
+		{ l( a..., std::format( " [{}|{}]", busy, idle ) ); }
+#endif
 		// internal operation: class thread may wait for work. It's private
 		// and so it has private parent access.
+#ifdef CPU_INFO_POOL_LOG
+		bool wait_for_work( std::unique_lock< std::mutex >& lock, int id ) noexcept
+#else
 		bool wait_for_work( std::unique_lock< std::mutex >& lock ) noexcept
+#endif
 		{
 			while ( queue.empty() && !stop.stop_requested() )
 			{
-				--active, ++free;
-				notifier.wait( lock );
-				--free, ++active;
+				--busy, ++idle;
+#ifdef CPU_INFO_POOL_LOG
+				sl( "initiate wait: ", id );
+#endif
+				notifier.wait( lock, stop.get_token(), [ this ] { return !queue.empty(); } );
+				--idle, ++busy;
 			}
 			return !stop.stop_requested();
 		}
 		class thread
 		{
 			cpu_info::pool* pool;
+#ifdef CPU_INFO_POOL_LOG
+			int id;
+#endif
 
 		  public:
+#ifndef CPU_INFO_POOL_LOG
 			thread( cpu_info::pool* _p )
 				: pool( _p )
+#else
+			thread( cpu_info::pool* _p, int _id )
+				: pool( _p )
+				, id( _id )
+#endif
 			{}
 			void operator()()
 			{
 				std::unique_lock< std::mutex > lock( pool->mutex );
+#ifdef CPU_INFO_POOL_LOG
+				pool->l( "started thread: ", id );
+				while ( pool->wait_for_work( lock, id ) ) // run until killed
+#else
 				while ( pool->wait_for_work( lock ) ) // run until killed
+#endif
 				{
 					auto func = std::move( pool->queue.front() );
 					pool->queue.pop();
+#ifdef CPU_INFO_POOL_LOG
+					pool->l( "starting work: ", id );
+#endif
 					lock.unlock();
-					if ( !pool->queue.empty() ) pool->notifier.notify_one();
+					// if ( !pool->queue.empty() ) pool->notifier.notify_one();
 					func(); // this will take time
 					lock.lock();
 				}
+#ifdef CPU_INFO_POOL_LOG
+				pool->l( "killed: ", id );
+#endif
 			}
 		};
 
@@ -104,9 +149,14 @@ namespace cpu_info
 			// threads will start, thus we need to protect internal data during CTor
 			std::scoped_lock lock( mutex );
 			// find out logical cpu count-1
-			const size_t	 N = std::jthread::hardware_concurrency() - 1;
+			const size_t	 N = std::jthread::hardware_concurrency();
+#ifndef CPU_INFO_POOL_LOG
+			for ( auto i: std::views::iota( 1ul, N ) ) ++busy, p00l.emplace_back( thread( this ) );
+#else
 			for ( auto i: std::views::iota( 1ul, N ) )
-				++active, p00l.emplace_back( thread( this ) );
+				++busy, p00l.emplace_back( thread( this, i ) );
+			init = std::chrono::system_clock::now();
+#endif
 			// As all threads try to acquire the mutex via their unique_lock right from the
 			// start, it all begins right after the CTor ends, releasing the mutex.
 
@@ -115,6 +165,16 @@ namespace cpu_info
 			// happen to all threads, except if there were so many, that the main thread already
 			// provided work.
 		}
+		~pool()
+		{
+			stop.request_stop(); // wake'em all to find out about the stop request.
+			// this is enough to make all threads stop execution and join in due time.
+#ifdef CPU_INFO_POOL_LOG
+			// to output a log, make' em join
+			while ( busy < p00l.size() ) std::this_thread::yield();
+			std::cout << log.str();
+#endif
+		}
 		/*
 		 *  now for the advanced stuff: run_task - 2 variants:
 		 *  1. set_and_forget_kind
@@ -122,8 +182,11 @@ namespace cpu_info
 		 */
 		void run_task( std::move_only_function< void() >&& task )
 		{
-			std::unique_lock< std::recursive_mutex > lock( mutex );
+			std::unique_lock< std::mutex > lock( mutex );
 			queue.push( std::move( task ) );
+#ifdef CPU_INFO_POOL_LOG
+			sl( "task enqueued" );
+#endif
 			notifier.notify_one();
 		}
 		template < typename F, typename... Args >
@@ -141,16 +204,17 @@ namespace cpu_info
 		{
 			if ( groups.contains( gid ) )
 			{
-				std::unique_lock< std::recursive_mutex > lock( mutex );
-				auto&									 g{ groups.at( gid ) };
-				const auto								 sz{ g.second.size() };
+				auto&	   g{ groups.at( gid ) };
+				const auto sz{ g.second.size() };
 				g.first.fetch_add( sz );
-				for ( auto tid: std::views::iota( 0ul, sz - 1 ) )
+				for ( auto tid: std::views::iota( 0ul, sz ) )
 					run_task(
 						[ this ]( task_group_id group_id, auto task_id )
 						{
 							std::invoke( groups.at( group_id ).second[ task_id ] );
 							groups.at( group_id ).first.fetch_sub( 1, std::memory_order_release );
+							groups.at( group_id )
+								.first.notify_all(); // dunno how many listeners there are!
 						},
 						gid, tid );
 			}
@@ -165,6 +229,7 @@ namespace cpu_info
 					{
 						std::move( t )();
 						groups.at( g ).first.fetch_sub( 1, std::memory_order_release );
+						groups.at( g ).first.notify_all();
 					},
 					gid );
 			}
@@ -178,12 +243,18 @@ namespace cpu_info
 		{
 			if ( groups.contains( gid ) )
 			{
-				auto& a	 = groups.at( gid ).first;
-				auto  cv = a.load( std::memory_order_relaxed );
-				while ( cv > 0 && !stop.stop_requested() )
-					a.wait( cv ), cv = a.load( std::memory_order_relaxed );
+				int	  cv;
+				auto& a = groups.at( gid ).first;
+				while ( !stop.stop_requested() && 0 < ( cv = a.load( std::memory_order_acquire ) ) )
+					a.wait( cv, std::memory_order_consume );
 				return !stop.stop_requested();
 			} else return false;
 		}
+		auto status() const noexcept
+		{
+			std::unique_lock lock( mutex );
+			return std::make_pair( busy, idle );
+		}
 	};
+
 } // namespace cpu_info

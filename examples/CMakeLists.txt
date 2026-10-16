@@ -8,3 +8,6 @@ target_link_libraries( cpu_id_example PUBLIC cpu_info )
 
 add_executable( cpu_topo_example test_topo.cpp )
 target_link_libraries( cpu_topo_example PUBLIC cpu_info )
+
+add_executable( cpu_pool_example test_pool.cpp )
+target_link_libraries( cpu_pool_example PUBLIC cpu_info )
