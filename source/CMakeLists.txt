@@ -7,6 +7,7 @@ set( SELF_CONTAINED_HEADERS
     cpu_info.hpp
     cpu_id.hpp
     cpu_topo.hpp
+    cpu_pool.hpp
 )
 add_library( cpu_info INTERFACE ${SELF_CONTAINED_HEADERS} )
 set_target_properties( cpu_info PROPERTIES
