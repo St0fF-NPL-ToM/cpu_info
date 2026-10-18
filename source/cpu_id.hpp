@@ -48,12 +48,13 @@ namespace cpu_info
 			return {};
 		}
 		// accessor to meet the requirement to use the template functions from cpu_info
-		R operator()( unsigned l, unsigned s ) const noexcept { return at( l, s ); }
-		// overwrite default map index operator with this const version
-		L operator[]( unsigned leaf ) const noexcept
+		R		 operator()( unsigned l, unsigned s ) const noexcept { return at( l, s ); }
+		// provide non-throwing map index operator as const version
+		const L &operator[]( unsigned leaf ) const noexcept
 		{
 			if ( contains( leaf ) ) return M::at( leaf );
-			else return {};
+			else				   // return leaf 00 on bad request. We do not throw!
+				return M::at( 0 ); // Do your homework instead!
 		}
 		// Informational functionality following …
 		unsigned max_leaf() const noexcept { return ( *this ? at( 0, 0 ).e.ax : 0u ); }
@@ -178,6 +179,9 @@ namespace cpu_info
 					break;
 			}
 		}
+
+	  private:
+		using M::operator[]; // make base operator unusable
 	};
 
 } // namespace cpu_info

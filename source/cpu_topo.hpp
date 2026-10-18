@@ -11,9 +11,9 @@ namespace cpu_info
 	{
 	  public:
 		// system-assigned process affinity mask
-		const affinity				  process_affinity;
+		const affinity							process_affinity;
 		// list of actual cpu_id mappings, including pre-masked IDs
-		std::vector< cpu_id >			  cpu_ids;
+		std::vector< cpu_id >					cpu_ids;
 		// a vector of maps to count masked apic_ids - describes how many
 		// logical cores share the respective masked apic id
 		std::vector< std::map< APIC_id, int > > lvl_ids;
@@ -94,7 +94,7 @@ namespace cpu_info
 		void parse_topology() noexcept
 		{
 			apicid_bit_layouts abl;
-			auto			  &cpu0 = cpu_ids.front();
+			const auto		  &cpu0 = cpu_ids.front();
 			if ( const auto il = cpu0.id_leaf(); il <= 1 )
 			{
 				abl.emplace_back( LogicalDomain, cpu0.domain_shift( LogicalDomain ), mask_map{} );

@@ -2,11 +2,15 @@
 
 [→ back to overview](overview.md)
 
-The cpu topology of a system is mostly of informational nature.  But when it comes to scheduling and optimizing many tasks at hand, taking this topology into account allows for much more flexibility and thoughput.
+The cpu topology of a system is mostly of informational nature.
 
-Modern CPUs and OSes are vastly parallel, not much left to compare to a CMOS 6502 from the nineteenseventies …
+One could think: when it comes to scheduling and optimizing many tasks at hand, taking this topology into account allows for much more flexibility and thoughput.
 
-They allow for multiple types of mulitple cpus on a single chip nowadays, so the first glance informational nature quickly becomes inevitable system structure.
+We have multiple types of multiple cpus on a single chip nowadays, so the first glance informational nature actually is inevitable system structure.
+
+Although that indeed is reality, it's also reality that moden CPUs support giving feedback to the OS about scheduling.  And modern OS like Windows or Linux do take this feedback into account.
+
+So the saying "one could think" in above paragraph holds true, but it's already a solved and thought-through issue.
 
 ---
 
@@ -18,8 +22,6 @@ The basic questions I was asking when starting with the implementation was:
 - does the system support different cores?
   - if yes how many of which type? (to better answer the first question)
 - which cores are shared logicals and which ones are pure physical?
-
-The overall question just being: how can I spread different kinds of tasks optimally on the system at hand?
 
 Therefore the `cpu_topo` constructor does the following things in order:
 
@@ -45,7 +47,7 @@ After creation, this class serves as an informational container.
 The members are:
 
 ```cpp
-    const affinity       process_affinity;   // contains the first queried (i.e. orignal) process affinity
+    const affinity      process_affinity;   // contains the first queried (i.e. orignal) process affinity
     vector< cpu_id >    cpu_ids;            // the vector of `cpu_id` entries for each logical cpu (numerical
                                             // (non-apic-id) ID of each core is its index into the vector)
     vector< map< apic_id, int > >
