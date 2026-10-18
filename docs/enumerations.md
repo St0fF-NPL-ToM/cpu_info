@@ -48,7 +48,8 @@ If you like, please use the X-macro for creating an output string map and output
 #undef X
 ```
 
-> P.s.: the addition of the "0"-element just serves security. If `cpuid leaf 0x1a` was not present, zero may be a returned value.
+> [!important]
+> The addition of the "0"-element just serves security. If `cpuid leaf 0x1a` was not present, zero may be a returned value.
 >
 > Another variation would be to transform the value from its 7 bits into 2 (`v >> 5`), as only values `0x20` and `0x40` are to be expected if that cpuid leaf exists, and `0x00` if it doesn't exist.
 >
@@ -117,7 +118,8 @@ This enum is an exhaustive conglomeration of Intel®-defined bits of cpu feature
 Internally, its numeric value is decomposed to look up the current state inside the cpuid-leafs and subleafs.
 
 So its main purpose is querying, if a specific core supports a specific feature.
-> !ATTN: Indeed, features may differ between cores on a physical die or package!
+> [!caution]
+> Indeed, features may differ between cores on a physical die or package!
 
 ### hints on using the X-macro
 
