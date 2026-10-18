@@ -69,6 +69,7 @@ Using `apply_next()` is discouraged, but safe.\
 Its primary target is the `affinity_iterator`, thus this function WILL check if only one cpu is selected inside the `affinity`.\
 In case none or more than 1 bits are set inside its mask, it won't do anything and return `false`.
 
+> [!important]
 > As a side-note: the function MUST check, else its termination condition would not safely be meetable, resulting in an infinite cpu switching loop.
 
 ---
@@ -87,7 +88,8 @@ And there are operators to derive `affinity`s via logical operations between 2 s
 - `affinity     operator&( const affinity& )` - intersect two sets
 - `affinity     operator^( const affinity& )` - disjoin two sets (keep only non-shared items)
 
-> ::Note:: Take care when setting parenthesis …
+> [!tip]
+> Take care when setting parenthesis …
 
 ---
 
@@ -111,7 +113,8 @@ So, using the affinity lock is comparable to using a `std::scoped_lock< mutex >`
     // Original thread affinity restored.
 ```
 
-> NOTE: this class is `non_copyable` and `non_movable` and `non_default_constructible`
+> [!NOTE]
+> this class is `non_copyable` and `non_movable` and `non_default_constructible`
 
 ---
 
@@ -125,7 +128,8 @@ Last but not least is the iterator class.  Nothing special:
   - in case current number was last, restore original `affinity`, return `false`
 - on destruction: also restore original affinity (aborted run)
 
-> Note: this class is `default_constructible`, `movable`, BUT `not_copyable`
+> [!Note]
+> this class is `default_constructible`, `movable`, BUT `not_copyable`
 > This is to restrict one active instance to one destruction-reset-of-affinity.
 
 ---
