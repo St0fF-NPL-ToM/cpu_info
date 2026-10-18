@@ -30,6 +30,10 @@ Describes the view of a single logical core on itself.
 - `effficient`: 1
 - `performant`: 2
 
+> [!note]
+> see issue #29 on extension proposal
+> - current µArch even supports "very efficient cores", though with current algorithm it also reports as `effficient`
+
 ---
 
 ## cpu_set::cpu_core_type
